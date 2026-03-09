@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V-ARCHIVE Compare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel: #111118;
+    --border: #1e1e2e;
+    --c1: #00f0ff;
+    --c2: #ff4b7d;
+    --text: #e0e0f0;
+    --dim: #5a5a7a;
+    --gold: #ffd700;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,240,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,240,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
+
+  /* Header */
+  header { text-align: center; margin-bottom: 40px; }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(22px, 5vw, 40px);
+    font-weight: 900; letter-spacing: 4px;
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 6px;
+  }
+  .subtitle { font-size: 12px; color: var(--dim); letter-spacing: 3px; text-transform: uppercase; }
+
+  /* Input card */
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px; margin-bottom: 32px;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--c1), var(--c2));
+  }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 20px; align-items: end;
+  }
+  @media(max-width:640px){ .input-row { grid-template-columns: 1fr; } }
+
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field-label { font-size: 10px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; font-family: 'Orbitron', monospace; }
+
+  .nick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .nick-sub { display: flex; flex-direction: column; gap: 5px; }
+  .nick-tag { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'Orbitron', monospace; }
+  .nick-tag.p1 { color: var(--c1); } .nick-tag.p2 { color: var(--c2); }
+
+  input[type=text] {
+    background: #0d0d16; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'Noto Sans KR', sans-serif;
+    font-size: 14px; padding: 10px 14px; outline: none; width: 100%;
+    transition: border-color .2s;
+  }
+  input[type=text]:focus { border-color: var(--c1); }
+
+  .btn-group { display: flex; gap: 6px; }
+  .bbtn {
+    background: #0d0d16; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--dim); cursor: pointer; font-family: 'Orbitron', monospace;
+    font-size: 12px; font-weight: 700; padding: 10px 14px; transition: all .2s;
+  }
+  .bbtn:hover { border-color: var(--c1); color: var(--c1); }
+  .bbtn.on { background: rgba(0,240,255,.1); border-color: var(--c1); color: var(--c1); }
+
+  .go-btn {
+    background: linear-gradient(135deg, var(--c1), #0090aa);
+    border: none; border-radius: 6px; color: #000;
+    cursor: pointer; font-family: 'Orbitron', monospace;
+    font-size: 13px; font-weight: 700; letter-spacing: 1px;
+    padding: 10px 28px; white-space: nowrap;
+    transition: opacity .2s, transform .1s;
+  }
+  .go-btn:hover { opacity: .85; }
+  .go-btn:active { transform: scale(.97); }
+  .go-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Filter row */
+  .frow {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);
+  }
+  .flabel { font-size: 10px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase; font-family: 'Orbitron', monospace; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    background: #0d0d16; border: 1px solid var(--border); border-radius: 20px;
+    color: var(--dim); cursor: pointer; font-size: 11px; padding: 4px 12px;
+    transition: all .2s; user-select: none;
+  }
+  .chip:hover { border-color: var(--c2); color: var(--c2); }
+  .chip.on { background: rgba(255,75,125,.1); border-color: var(--c2); color: var(--c2); }
+
+  /* Status */
+  .status { text-align: center; padding: 60px 20px; color: var(--dim); font-size: 14px; display: none; }
+  .status.show { display: block; }
+  .spinner {
+    width: 32px; height: 32px; border: 2px solid var(--border);
+    border-top-color: var(--c1); border-radius: 50%;
+    animation: spin .7s linear infinite; margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Summary */
+  #results { display: none; }
+  #results.show { display: block; }
+
+  .summary {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    gap: 12px; align-items: center; margin-bottom: 24px;
+  }
+  .splayer {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .splayer.p1 { border-left: 3px solid var(--c1); }
+  .splayer.p2 { border-right: 3px solid var(--c2); text-align: right; }
+  .sname { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; }
+  .splayer.p1 .sname { color: var(--c1); }
+  .splayer.p2 .sname { color: var(--c2); }
+  .sstat { font-size: 12px; color: var(--dim); }
+  .sstat b { color: var(--text); font-weight: 500; }
+  .vs { font-family: 'Orbitron', monospace; font-size: 20px; font-weight: 900; color: var(--dim); text-align: center; }
+
+  /* Table */
+  .tbl-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+  .tctl {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px;
+  }
+  .tcount { font-size: 12px; color: var(--dim); }
+  .sctrl { display: flex; gap: 6px; align-items: center; }
+  .slabel { font-size: 10px; color: var(--dim); letter-spacing: 1px; text-transform: uppercase; }
+  .sbtn {
+    background: #0d0d16; border: 1px solid var(--border); border-radius: 4px;
+    color: var(--dim); cursor: pointer; font-size: 11px; padding: 4px 10px; transition: all .15s;
+  }
+  .sbtn:hover { border-color: var(--c1); color: var(--text); }
+  .sbtn.on { border-color: var(--c1); color: var(--c1); background: rgba(0,240,255,.08); }
+
+  .thead {
+    display: grid;
+    grid-template-columns: 32px 1fr 72px 24px 90px 64px 90px 24px 72px;
+    padding: 9px 16px; background: #0d0d16; border-bottom: 1px solid var(--border);
+    font-size: 9px; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase;
+    font-family: 'Orbitron', monospace; gap: 6px; align-items: center;
+  }
+  .thead .h1 { color: var(--c1); }
+  .thead .h2 { color: var(--c2); text-align: right; }
+  .thead .hc { text-align: center; }
+
+  .trow {
+    display: grid;
+    grid-template-columns: 32px 1fr 72px 24px 90px 64px 90px 24px 72px;
+    padding: 9px 16px; border-bottom: 1px solid rgba(30,30,46,.6);
+    gap: 6px; align-items: center; font-size: 13px; transition: background .15s;
+  }
+  .trow:last-child { border-bottom: none; }
+  .trow:hover { background: rgba(255,255,255,.02); }
+  .trow.op1 { background: rgba(0,240,255,.015); }
+  .trow.op2 { background: rgba(255,75,125,.015); }
+
+  .rnum { font-size: 10px; color: var(--dim); font-family: 'Orbitron', monospace; text-align: center; }
+  .sname2 { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .smeta { display: flex; gap: 5px; margin-top: 2px; align-items: center; }
+
+  .pat {
+    font-size: 9px; font-family: 'Orbitron', monospace; font-weight: 700;
+    border-radius: 3px; padding: 1px 5px; letter-spacing: .5px;
+  }
+  .NM { background: rgba(100,200,100,.15); color: #64c864; border: 1px solid rgba(100,200,100,.3); }
+  .HD { background: rgba(100,150,255,.15); color: #6496ff; border: 1px solid rgba(100,150,255,.3); }
+  .MX { background: rgba(255,150,50,.15); color: #ff9632; border: 1px solid rgba(255,150,50,.3); }
+  .SC { background: rgba(220,80,255,.15); color: #dc50ff; border: 1px solid rgba(220,80,255,.3); }
+
+  .lv { font-size: 10px; color: var(--dim); }
+  .fl { font-size: 10px; color: var(--dim); }
+
+  .sc { font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; text-align: right; }
+  .sc.win { color: var(--c1); } .sc.lose { color: var(--c2); }
+  .sc.draw { color: var(--dim); } .sc.na { color: #2a2a3a; font-size: 11px; }
+  .sc.p2side { text-align: left; }
+
+  .bar { height: 6px; background: #1a1a2a; border-radius: 3px; overflow: hidden; }
+  .bf { height: 100%; border-radius: 3px; }
+  .bf1 { background: linear-gradient(90deg, var(--c1), rgba(0,240,255,.3)); }
+  .bf2 { background: linear-gradient(90deg, rgba(255,75,125,.3), var(--c2)); }
+
+  .diff { font-size: 11px; font-family: 'Orbitron', monospace; font-weight: 700; text-align: center; white-space: nowrap; }
+  .dp { color: var(--c1); } .dm { color: var(--c2); } .dz { color: var(--dim); }
+
+  .mc { text-align: center; font-size: 11px; }
+  .mci { color: var(--gold); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">V-Archive Compare</div>
+    <div class="subtitle">DJMAX RESPECT V · Score Comparison</div>
+  </header>
+
+  <div class="card">
+    <div class="input-row">
+      <div class="field">
+        <div class="field-label">닉네임</div>
+        <div class="nick-row">
+          <div class="nick-sub">
+            <span class="nick-tag p1">PLAYER 1</span>
+            <input type="text" id="n1" placeholder="닉네임 입력" />
+          </div>
+          <div class="nick-sub">
+            <span class="nick-tag p2">PLAYER 2</span>
+            <input type="text" id="n2" placeholder="닉네임 입력" />
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">버튼</div>
+        <div class="btn-group" id="btnGroup">
+          <button class="bbtn" data-b="4">4B</button>
+          <button class="bbtn" data-b="5">5B</button>
+          <button class="bbtn on" data-b="6">6B</button>
+          <button class="bbtn" data-b="8">8B</button>
+        </div>
+      </div>
+
+      <button class="go-btn" id="goBtn" onclick="doSearch()">비교 시작</button>
+    </div>
+
+    <div class="frow">
+      <span class="flabel">패턴</span>
+      <div class="chips" id="patChips">
+        <span class="chip on" data-p="NM">NM</span>
+        <span class="chip on" data-p="HD">HD</span>
+        <span class="chip on" data-p="MX">MX</span>
+        <span class="chip on" data-p="SC">SC</span>
+      </div>
+      <span class="flabel" style="margin-left:8px">표시</span>
+      <div class="chips">
+        <span class="chip on" id="dCommon" onclick="toggleDisp('common')">공통</span>
+        <span class="chip on" id="dP1" onclick="toggleDisp('p1')">P1만</span>
+        <span class="chip on" id="dP2" onclick="toggleDisp('p2')">P2만</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="status" id="status"><div class="spinner" id="spin"></div><div id="smsg"></div></div>
+
+  <div id="results">
+    <div class="summary">
+      <div class="splayer p1" id="sp1"></div>
+      <div class="vs">VS</div>
+      <div class="splayer p2" id="sp2"></div>
+    </div>
+    <div class="tbl-wrap">
+      <div class="tctl">
+        <div class="tcount" id="tcount"></div>
+        <div class="sctrl">
+          <span class="slabel">정렬</span>
+          <button class="sbtn on" data-s="name" onclick="setSort('name')">곡명</button>
+          <button class="sbtn" data-s="diff" onclick="setSort('diff')">점수차</button>
+          <button class="sbtn" data-s="score" onclick="setSort('score')">최고점</button>
+          <button class="sbtn" data-s="level" onclick="setSort('level')">레벨</button>
+          <button class="sbtn" data-s="floor" onclick="setSort('floor')">층</button>
+        </div>
+      </div>
+      <div class="thead">
+        <div></div><div>곡명 / 패턴</div>
+        <div class="h1">SCORE</div><div class="h1 hc">MC</div><div class="h1" style="text-align:right">BAR</div>
+        <div class="hc">DIFF</div>
+        <div class="h2" style="text-align:left">BAR</div><div class="h2 hc">MC</div><div class="h2">SCORE</div>
+      </div>
+      <div id="tbody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let allData = [], selBtn = 6, sortBy = 'name';
+const pats = new Set(['NM','HD','MX','SC']);
+const disp = { common: true, p1: true, p2: true };
+
+// button select
+document.querySelectorAll('#btnGroup .bbtn').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#btnGroup .bbtn').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    selBtn = +b.dataset.b;
+  };
+});
+
+// pattern chips
+document.querySelectorAll('#patChips .chip').forEach(c => {
+  c.onclick = () => {
+    const p = c.dataset.p;
+    if (pats.has(p)) { if (pats.size > 1) { pats.delete(p); c.classList.remove('on'); } }
+    else { pats.add(p); c.classList.add('on'); }
+    render();
+  };
+});
+
+function toggleDisp(k) {
+  disp[k] = !disp[k];
+  document.getElementById(k === 'common' ? 'dCommon' : k === 'p1' ? 'dP1' : 'dP2').classList.toggle('on', disp[k]);
+  render();
+}
+
+function setSort(s) {
+  sortBy = s;
+  document.querySelectorAll('.sbtn').forEach(b => b.classList.toggle('on', b.dataset.s === s));
+  render();
+}
+
+function showStatus(msg, loading = true) {
+  const el = document.getElementById('status');
+  el.classList.add('show');
+  document.getElementById('smsg').textContent = msg;
+  document.getElementById('spin').style.display = loading ? 'block' : 'none';
+  document.getElementById('results').classList.remove('show');
+}
+
+function hideStatus() { document.getElementById('status').classList.remove('show'); }
+
+async function fetchData(nick, btn) {
+  const res = await fetch(`/api/varchive?path=archive/${encodeURIComponent(nick)}/button/${btn}`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || '유저를 찾을 수 없습니다');
+  return data.records;
+}
+
+async function doSearch() {
+  const n1 = document.getElementById('n1').value.trim();
+  const n2 = document.getElementById('n2').value.trim();
+  if (!n1 || !n2) { showStatus('두 닉네임을 모두 입력해주세요.', false); return; }
+
+  showStatus('데이터를 불러오는 중...');
+  document.getElementById('goBtn').disabled = true;
+
+  try {
+    const [r1, r2] = await Promise.all([fetchData(n1, selBtn), fetchData(n2, selBtn)]);
+
+    const m1 = new Map(), m2 = new Map();
+    r1.forEach(r => m1.set(`${r.title}|${r.pattern}`, r));
+    r2.forEach(r => m2.set(`${r.title}|${r.pattern}`, r));
+
+    const keys = new Set([...m1.keys(), ...m2.keys()]);
+    allData = [];
+    keys.forEach(k => {
+      const a = m1.get(k) ?? null, b = m2.get(k) ?? null, base = a ?? b;
+      allData.push({ key: k, title: base.title, name: base.name, pattern: base.pattern, level: base.level, floor: base.floor, floorName: base.floorName, r1: a, r2: b });
+    });
+
+    let w1 = 0, w2 = 0;
+    allData.forEach(d => {
+      if (d.r1 && d.r2) { if (d.r1.score > d.r2.score) w1++; else if (d.r2.score > d.r1.score) w2++; }
+    });
+
+    document.getElementById('sp1').innerHTML = `<div class="sname">${n1}</div><div class="sstat">승리 <b>${w1}</b>곡</div><div class="sstat">기록 <b>${r1.length}</b>곡</div>`;
+    document.getElementById('sp2').innerHTML = `<div class="sname">${n2}</div><div class="sstat">승리 <b>${w2}</b>곡</div><div class="sstat">기록 <b>${r2.length}</b>곡</div>`;
+
+    hideStatus();
+    document.getElementById('results').classList.add('show');
+    render();
+  } catch(e) {
+    showStatus('오류: ' + e.message, false);
+  } finally {
+    document.getElementById('goBtn').disabled = false;
+  }
+}
+
+function render() {
+  let data = allData.filter(d => pats.has(d.pattern)).filter(d => {
+    if (d.r1 && d.r2) return disp.common;
+    if (d.r1 && !d.r2) return disp.p1;
+    return disp.p2;
+  });
+
+  data.sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name) || a.pattern.localeCompare(b.pattern);
+    if (sortBy === 'level') return (b.level||0) - (a.level||0);
+    if (sortBy === 'floor') return (b.floor||0) - (a.floor||0);
+    if (sortBy === 'score') return Math.max(b.r1?.score||0, b.r2?.score||0) - Math.max(a.r1?.score||0, a.r2?.score||0);
+    if (sortBy === 'diff') {
+      const ad = (a.r1&&a.r2) ? Math.abs(a.r1.score-a.r2.score) : -1;
+      const bd = (b.r1&&b.r2) ? Math.abs(b.r1.score-b.r2.score) : -1;
+      return bd - ad;
+    }
+  });
+
+  document.getElementById('tcount').textContent = `${data.length}개 패턴`;
+
+  const frag = document.createDocumentFragment();
+  data.forEach((d, i) => {
+    const s1 = d.r1?.score ?? null, s2 = d.r2?.score ?? null;
+    let c1 = 'draw', c2 = 'draw', dcls = 'dz', dtxt = '—';
+    if (s1 !== null && s2 !== null) {
+      const diff = s1 - s2;
+      if (diff > 0) { c1='win'; c2='lose'; dcls='dp'; dtxt='+'+diff.toFixed(2); }
+      else if (diff < 0) { c1='lose'; c2='win'; dcls='dm'; dtxt=diff.toFixed(2); }
+      else { dtxt='±0'; }
+    } else if (s1===null&&s2!==null) { c2='win'; }
+    else if (s2===null&&s1!==null) { c1='win'; }
+
+    const row = document.createElement('div');
+    row.className = `trow${!d.r1?' op2':!d.r2?' op1':''}`;
+    row.innerHTML = `
+      <div class="rnum">${i+1}</div>
+      <div>
+        <div class="sname2" title="${d.name}">${d.name}</div>
+        <div class="smeta">
+          <span class="pat ${d.pattern}">${d.pattern}</span>
+          <span class="lv">Lv.${d.level}</span>
+          ${d.floorName ? `<span class="fl">★${d.floorName}</span>` : ''}
+        </div>
+      </div>
+      <div class="sc ${s1!==null?c1:'na'}">${s1!==null?s1.toFixed(2):'N/A'}</div>
+      <div class="mc">${d.r1?.maxCombo?'<span class="mci">✦</span>':''}</div>
+      <div class="bar"><div class="bf bf1" style="width:${s1??0}%"></div></div>
+      <div class="diff ${dcls}">${dtxt}</div>
+      <div class="bar"><div class="bf bf2" style="width:${s2??0}%"></div></div>
+      <div class="mc">${d.r2?.maxCombo?'<span class="mci">✦</span>':''}</div>
+      <div class="sc p2side ${s2!==null?c2:'na'}">${s2!==null?s2.toFixed(2):'N/A'}</div>
+    `;
+    frag.appendChild(row);
+  });
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  tbody.appendChild(frag);
+}
+
+document.getElementById('n1').addEventListener('keydown', e => e.key==='Enter' && doSearch());
+document.getElementById('n2').addEventListener('keydown', e => e.key==='Enter' && doSearch());
+</script>
+</body>
+</html>

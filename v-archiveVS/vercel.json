@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/varchive/:path*", "destination": "/api/varchive?path=:path*" }
+  ]
+}
