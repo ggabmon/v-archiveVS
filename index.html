@@ -567,7 +567,6 @@ canvas { width: 100% !important; }
           <span class="chip" data-lv="1-5">1~5</span>
           <span class="chip" data-lv="6-10">6~10</span>
           <span class="chip" data-lv="11-15">11~15</span>
-          <span class="chip" data-lv="16-20">16~20</span>
         </div>
       </div>
 
@@ -576,6 +575,9 @@ canvas { width: 100% !important; }
         <div class="filter-group-label">층(Floor)</div>
         <div class="chips" id="floorRangeChips">
           <span class="chip on c1" data-fl="all">전체</span>
+          <span class="chip" data-fl="1-5">1~5</span>
+          <span class="chip" data-fl="6-10">6~10</span>
+          <span class="chip" data-fl="11+">11~</span>
         </div>
       </div>
 
@@ -741,7 +743,17 @@ function getLvRange() {
   const [mn, mx] = selLvRange.split('-').map(Number);
   return { min: mn, max: mx };
 }
-function getFloorFilter() { return selFloor === 'all' ? null : selFloor; }
+// floor 값은 소수점 포함 숫자(예: 1.0, 6.5, 11.2)
+// '1-5' → [1, 6), '6-10' → [6, 11), '11+' → [11, ∞)
+function floorInRange(floorVal) {
+  if (selFloor === 'all') return true;
+  const f = parseFloat(floorVal);
+  if (isNaN(f)) return false;
+  if (selFloor === '1-5')  return f >= 1  && f < 6;
+  if (selFloor === '6-10') return f >= 6  && f < 11;
+  if (selFloor === '11+')  return f >= 11;
+  return true;
+}
 function getSearch() { return $('songSearch').value.trim().toLowerCase(); }
 
 /* ─── Fetch ──────────────────────────────────────────────────── */
@@ -837,21 +849,11 @@ function refreshSummary() {
 
 /* ─── Populate filters ───────────────────────────────────────── */
 function populateFilters() {
-  // 층 버튼 동적 생성
-  const floorMap = new Map();
-  allData.forEach(d => { if (d.floor != null) floorMap.set(String(d.floor), d.floorName || `${d.floor}층`); });
-  const floors = [...floorMap.entries()].sort((a,b) => +a[0] - +b[0]);
-
-  const fc = $('floorRangeChips');
-  fc.innerHTML = '<span class="chip on c1" data-fl="all">전체</span>';
-  floors.forEach(([fv, fn]) => {
-    fc.insertAdjacentHTML('beforeend', `<span class="chip" data-fl="${fv}">${fn}</span>`);
-  });
-  // 층 버튼 이벤트 재연결
-  fc.querySelectorAll('.chip').forEach(c => {
+  // 층 버튼은 고정(1~5, 6~10, 11~)이므로 이벤트만 연결
+  $('floorRangeChips').querySelectorAll('.chip').forEach(c => {
     c.onclick = () => {
       selFloor = c.dataset.fl;
-      fc.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      $('floorRangeChips').querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
       c.classList.add('on');
       onFilterChange();
     };
@@ -862,7 +864,6 @@ function populateFilters() {
 /* ─── Filter & sort ──────────────────────────────────────────── */
 function getFiltered() {
   const lvRange = getLvRange();
-  const floor   = getFloorFilter();
   const search  = getSearch();
   return allData
     .filter(d => pats.has(d.pattern))
@@ -873,7 +874,7 @@ function getFiltered() {
       return disp.p2;
     })
     .filter(d => !lvRange || (d.level >= lvRange.min && d.level <= lvRange.max))
-    .filter(d => !floor   || String(d.floor) === floor)
+    .filter(d => floorInRange(d.floor))
     .filter(d => !search  || (d.name || d.title || '').toLowerCase().includes(search));
 }
 
