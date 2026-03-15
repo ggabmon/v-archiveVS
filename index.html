@@ -561,6 +561,75 @@ canvas { width: 100% !important; }
 .mc { text-align: center; font-size: 11px; }
 .mci { color: var(--gold); }
 
+/* ─── Nickname history dropdown ──────────────────────────────── */
+.nick-wrap-rel { position: relative; flex: 1; min-width: 0; display: flex; }
+.nick-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  z-index: 100;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  display: none;
+}
+.nick-dropdown.open { display: block; }
+.nick-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background .12s;
+  gap: 8px;
+}
+.nick-dropdown-item:hover { background: rgba(255,255,255,.05); }
+.nick-dropdown-item .nick-name { flex: 1; font-family: var(--font-mono); }
+.nick-dropdown-del {
+  color: var(--dim2);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.nick-dropdown-del:hover { color: var(--c2); background: rgba(255,61,110,.1); }
+.nick-dropdown-empty { padding: 10px 12px; font-size: 12px; color: var(--dim); }
+
+/* ─── Rival pair dropdown ────────────────────────────────────── */
+.rival-history {
+  margin-top: 8px;
+  display: none;
+}
+.rival-history.show { display: block; }
+.rival-history-label {
+  font-size: 9px; color: var(--dim); letter-spacing: 2px;
+  text-transform: uppercase; font-family: var(--font-mono);
+  margin-bottom: 5px;
+}
+.rival-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.rival-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 3px 10px 3px 10px;
+  font-size: 11px; font-family: var(--font-mono);
+  cursor: pointer; color: var(--dim);
+  transition: all .15s;
+}
+.rival-chip:hover { border-color: var(--c2); color: var(--text); }
+.rival-chip .rp1 { color: var(--c1); }
+.rival-chip .rp2 { color: var(--c2); }
+.rival-chip .rsep { color: var(--dim2); margin: 0 2px; }
+.rival-chip-del {
+  color: var(--dim2); font-size: 10px; margin-left: 3px;
+  padding: 0 3px; border-radius: 2px; line-height: 1;
+}
+.rival-chip-del:hover { color: var(--c2); background: rgba(255,61,110,.12); }
+
 /* ─── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
@@ -588,13 +657,19 @@ canvas { width: 100% !important; }
     <!-- Single-row input -->
     <div class="input-row-main">
       <div class="nicks-wrap">
-        <div class="nick-block">
-          <span class="ptag solo" id="p1tag">PLAYER</span>
-          <input type="text" id="n1" placeholder="닉네임 입력" autocomplete="off" />
+        <div class="nick-wrap-rel">
+          <div class="nick-block">
+            <span class="ptag solo" id="p1tag">PLAYER</span>
+            <input type="text" id="n1" placeholder="닉네임 입력" autocomplete="off" />
+          </div>
+          <div class="nick-dropdown" id="dd1"></div>
         </div>
-        <div class="nick-block" id="n2field" style="display:none">
-          <span class="ptag p2">RIVAL</span>
-          <input type="text" id="n2" placeholder="닉네임 입력" autocomplete="off" />
+        <div class="nick-wrap-rel" id="n2field" style="display:none">
+          <div class="nick-block">
+            <span class="ptag p2">RIVAL</span>
+            <input type="text" id="n2" placeholder="닉네임 입력" autocomplete="off" />
+          </div>
+          <div class="nick-dropdown" id="dd2"></div>
         </div>
       </div>
       <div class="btn-block">
@@ -608,6 +683,12 @@ canvas { width: 100% !important; }
       <button class="go-btn" id="goBtn">조회</button>
     </div>
 
+    <!-- Rival history (compare mode only) -->
+    <div class="rival-history" id="rivalHistory">
+      <div class="rival-history-label">라이벌 기록</div>
+      <div class="rival-chips" id="rivalChips"></div>
+    </div>
+
     <!-- Filter area -->
     <div class="filter-area">
       <!-- Pattern -->
@@ -616,6 +697,7 @@ canvas { width: 100% !important; }
         <div class="chips" id="patChips">
           <span class="chip on" data-p="SC">SC</span>
           <span class="chip" data-p="non-sc">비SC</span>
+          <span class="chip" data-p="all">전체</span>
         </div>
       </div>
 
@@ -819,9 +901,11 @@ function setMode(m) {
   if (m === 'solo') {
     p1tag.textContent = 'PLAYER';
     p1tag.className   = 'ptag solo';
+    $('rivalHistory').classList.remove('show');
   } else {
     p1tag.textContent = 'PLAYER 1';
     p1tag.className   = 'ptag p1';
+    renderRivalChips();
   }
 }
 setMode('solo');
@@ -869,6 +953,7 @@ async function doSearch() {
   try {
     if (mode === 'solo') {
       const r1 = await fetchData(n1, selBtn);
+      saveNick(n1);
       allData = r1.map(r => ({
         key: `${r.title}|${r.pattern}`, title: r.title, name: r.name,
         pattern: r.pattern, level: r.level, floor: r.floor, floorName: r.floorName,
@@ -881,7 +966,19 @@ async function doSearch() {
       $('tabBtnStats').style.display = 'none';
       if (currentTab !== 'table') switchTab('table');
     } else {
-      const [r1, r2] = await Promise.all([fetchData(n1, selBtn), fetchData(n2, selBtn)]);
+      // 각각 개별 조회 - 실패해도 어느 쪽인지 표시
+      let r1 = [], r2 = [], err1 = null, err2 = null;
+      await Promise.all([
+        fetchData(n1, selBtn).then(d => r1 = d).catch(e => err1 = e),
+        fetchData(n2, selBtn).then(d => r2 = d).catch(e => err2 = e),
+      ]);
+      if (err1 && err2) { showStatus(`두 유저 모두 조회 실패:\n${n1}: ${err1.message}\n${n2}: ${err2.message}`, false); $('goBtn').disabled=false; return; }
+      if (err1) { showStatus(`'${n1}' 유저를 찾을 수 없습니다`, false); $('goBtn').disabled=false; return; }
+      if (err2) { showStatus(`'${n2}' 유저를 찾을 수 없습니다`, false); $('goBtn').disabled=false; return; }
+
+      saveNick(n1); saveNick(n2);
+      saveRivalPair(n1, n2);
+      renderRivalChips();
       const m1 = new Map(), m2 = new Map();
       r1.forEach(r => m1.set(`${r.title}|${r.pattern}`, r));
       r2.forEach(r => m2.set(`${r.title}|${r.pattern}`, r));
@@ -950,12 +1047,115 @@ function populateFilters() {
   $('patChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.p === 'SC'));
 }
 
+/* ─── Nickname history (localStorage) ───────────────────────── */
+const NICK_KEY   = 'varchive_nicks';
+const RIVAL_KEY  = 'varchive_rivals';
+const MAX_NICKS  = 8;
+const MAX_RIVALS = 8;
+
+function loadNicks()   { try { return JSON.parse(localStorage.getItem(NICK_KEY)  || '[]'); } catch { return []; } }
+function loadRivals()  { try { return JSON.parse(localStorage.getItem(RIVAL_KEY) || '[]'); } catch { return []; } }
+
+function saveNick(nick) {
+  if (!nick) return;
+  let list = loadNicks().filter(n => n !== nick);
+  list.unshift(nick);
+  localStorage.setItem(NICK_KEY, JSON.stringify(list.slice(0, MAX_NICKS)));
+}
+function saveRivalPair(n1, n2) {
+  if (!n1 || !n2) return;
+  // 순서 무관하게 중복 제거 (A vs B == B vs A)
+  let list = loadRivals().filter(r => !(
+    (r[0] === n1 && r[1] === n2) || (r[0] === n2 && r[1] === n1)
+  ));
+  list.unshift([n1, n2]);
+  localStorage.setItem(RIVAL_KEY, JSON.stringify(list.slice(0, MAX_RIVALS)));
+}
+function deleteNick(nick) {
+  localStorage.setItem(NICK_KEY, JSON.stringify(loadNicks().filter(n => n !== nick)));
+}
+function deleteRival(n1, n2) {
+  localStorage.setItem(RIVAL_KEY, JSON.stringify(
+    loadRivals().filter(r => !((r[0]===n1&&r[1]===n2)||(r[0]===n2&&r[1]===n1)))
+  ));
+}
+
+function renderRivalChips() {
+  const pairs = loadRivals();
+  const rc = $('rivalChips');
+  const rh = $('rivalHistory');
+  if (!pairs.length) { rh.classList.remove('show'); return; }
+  rh.classList.add('show');
+  rc.innerHTML = pairs.map(([a, b]) => `
+    <div class="rival-chip" data-r1="${a}" data-r2="${b}">
+      <span class="rp1">${a}</span>
+      <span class="rsep">vs</span>
+      <span class="rp2">${b}</span>
+      <span class="rival-chip-del" data-da="${a}" data-db="${b}" title="삭제">✕</span>
+    </div>`).join('');
+  rc.querySelectorAll('.rival-chip').forEach(chip => {
+    chip.addEventListener('mousedown', e => {
+      if (e.target.dataset.da) {
+        e.preventDefault();
+        deleteRival(e.target.dataset.da, e.target.dataset.db);
+        renderRivalChips();
+        return;
+      }
+      e.preventDefault();
+      $('n1').value = chip.dataset.r1;
+      $('n2').value = chip.dataset.r2;
+    });
+  });
+}
+
+function renderDropdown(ddEl, inputEl) {
+  const nicks = loadNicks();
+  const q = inputEl.value.trim().toLowerCase();
+  const filtered = q ? nicks.filter(n => n.toLowerCase().includes(q)) : nicks;
+  if (!filtered.length) {
+    ddEl.innerHTML = '<div class="nick-dropdown-empty">저장된 닉네임 없음</div>';
+  } else {
+    ddEl.innerHTML = filtered.map(n => `
+      <div class="nick-dropdown-item" data-nick="${n}">
+        <span class="nick-name">${n}</span>
+        <span class="nick-dropdown-del" data-del="${n}" title="삭제">✕</span>
+      </div>`).join('');
+    ddEl.querySelectorAll('.nick-dropdown-item').forEach(item => {
+      item.addEventListener('mousedown', e => {
+        if (e.target.dataset.del) {
+          e.preventDefault();
+          deleteNick(e.target.dataset.del);
+          renderDropdown(ddEl, inputEl);
+          return;
+        }
+        e.preventDefault();
+        inputEl.value = item.dataset.nick;
+        ddEl.classList.remove('open');
+      });
+    });
+  }
+  ddEl.classList.add('open');
+}
+
+function initNickInput(inputId, ddId) {
+  const inp = $(inputId), dd = $(ddId);
+  inp.addEventListener('focus', () => renderDropdown(dd, inp));
+  inp.addEventListener('input', () => { if (dd.classList.contains('open')) renderDropdown(dd, inp); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Escape') dd.classList.remove('open'); });
+  document.addEventListener('click', e => {
+    if (!inp.contains(e.target) && !dd.contains(e.target)) dd.classList.remove('open');
+  });
+}
+initNickInput('n1', 'dd1');
+initNickInput('n2', 'dd2');
+renderRivalChips();
+
 /* ─── Filter & sort ──────────────────────────────────────────── */
 function getFiltered() {
   const lvRange = getLvRange();
   const search  = getSearch();
   return allData
-    .filter(d => patMode === 'SC' ? d.pattern === 'SC' : d.pattern !== 'SC')
+    .filter(d => patMode === 'SC' ? d.pattern === 'SC' : patMode === 'non-sc' ? d.pattern !== 'SC' : true)
     .filter(d => {
       if (mode === 'solo') return true;
       if (d.r1 && d.r2)  return disp.common;
@@ -1041,7 +1241,7 @@ function render() {
       row.innerHTML = `
         <div class="rnum">${i+1}</div>
         <div>${meta}</div>
-        <div class="sc" style="color:var(--c1);text-align:right;grid-column:3/6">${s1!==null?s1.toFixed(2):'N/A'}</div>
+        <div class="sc" style="color:var(--c1);text-align:right;grid-column:3/6">${s1!==null?s1.toFixed(2):''}</div>
         <div class="mc" style="grid-column:6">${d.r1?.maxCombo?`<span class="mci" title="${n1} MAX콤보">✦</span>`:''}</div>
         <div style="grid-column:7/10"><div class="bar"><div class="bf bf1" style="width:${s1??0}%"></div></div></div>`;
     } else {
@@ -1049,19 +1249,19 @@ function render() {
         <div class="rnum col-num">${i+1}</div>
         <div class="col-song">${meta}
           <div class="mobile-scores">
-            <span class="ms1">${s1!==null?s1.toFixed(2):'N/A'}</span>
+            <span class="ms1">${s1!==null?s1.toFixed(2):''}</span>
             <span class="ms-sep">vs</span>
-            <span class="ms2">${s2!==null?s2.toFixed(2):'N/A'}</span>
+            <span class="ms2">${s2!==null?s2.toFixed(2):''}</span>
             ${dtxt!=='—'?`<span class="ms-diff ${mdc}">${dtxt}</span>`:''}
           </div>
         </div>
-        <div class="sc ${s1!==null?c1:'na'} col-sc1">${s1!==null?s1.toFixed(2):'N/A'}</div>
+        <div class="sc ${s1!==null?c1:'na'} col-sc1">${s1!==null?s1.toFixed(2):''}</div>
         <div class="mc col-mc1">${d.r1?.maxCombo?`<span class="mci" title="${n1} MAX콤보">✦</span>`:''}</div>
         <div class="bar col-bar1"><div class="bf bf1" style="width:${s1??0}%"></div></div>
         <div class="diff ${dcls} col-diff">${dtxt}</div>
         <div class="bar col-bar2"><div class="bf bf2" style="width:${s2??0}%"></div></div>
         <div class="mc col-mc2">${d.r2?.maxCombo?`<span class="mci" title="${n2} MAX콤보">✦</span>`:''}</div>
-        <div class="sc p2s ${s2!==null?c2:'na'} col-sc2">${s2!==null?s2.toFixed(2):'N/A'}</div>`;
+        <div class="sc p2s ${s2!==null?c2:'na'} col-sc2">${s2!==null?s2.toFixed(2):''}</div>`;
     }
     frag.appendChild(row);
   });
