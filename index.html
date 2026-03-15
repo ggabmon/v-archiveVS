@@ -108,33 +108,107 @@ header {
 .mode-btn:hover { border-color: var(--c1); color: var(--c1); }
 .mode-btn.on { background: rgba(0,229,255,.1); border-color: var(--c1); color: var(--c1); }
 
-/* ─── Input Area ─────────────────────────────────────────────── */
-.input-grid {
+/* ─── Single-row input layout ────────────────────────────────── */
+.input-row-main {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 16px;
-  align-items: end;
+  /* 닉네임들(가변) + 버튼들(고정) + 조회(고정) */
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: stretch;
 }
-@media (max-width: 700px) {
-  .input-grid { grid-template-columns: 1fr 1fr; }
-  .input-grid .go-col { grid-column: 1 / -1; }
+/* 닉네임 블록들을 감싸는 래퍼 */
+.nicks-wrap {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
 }
-@media (max-width: 480px) {
-  .input-grid { grid-template-columns: 1fr; }
+.nick-block {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  height: 42px;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.nick-block:focus-within { border-color: var(--c1); box-shadow: 0 0 0 2px rgba(0,229,255,.08); }
+/* ptag를 입력란 앞 라벨로 */
+.nick-block .ptag {
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-radius: 0;
+  padding: 0 10px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.nick-block .ptag.p1 {
+  background: rgba(0,229,255,.12);
+  border-right: 1px solid rgba(0,229,255,.2);
+  color: var(--c1);
+}
+.nick-block .ptag.p2 {
+  background: rgba(255,61,110,.12);
+  border-right: 1px solid rgba(255,61,110,.2);
+  color: var(--c2);
+}
+.nick-block .ptag.solo {
+  background: rgba(0,229,255,.08);
+  border-right: 1px solid rgba(0,229,255,.15);
+  color: var(--c1);
+}
+.nick-block input[type=text] {
+  background: transparent;
+  border: none;
+  padding: 0 12px;
+  font-size: 14px;
+  box-shadow: none;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+}
+.nick-block input[type=text]:focus { box-shadow: none; }
+
+.btn-block {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.btn-block .btn-group { flex-wrap: nowrap; gap: 4px; }
+.btn-block .bbtn { padding: 0 12px; height: 42px; flex: none; font-size: 11px; }
+
+.go-btn {
+  background: linear-gradient(135deg, var(--c1), var(--c1d));
+  border: none; border-radius: var(--radius);
+  color: #000;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 0 16px;
+  height: 42px;
+  white-space: nowrap;
+  transition: opacity .2s, transform .1s;
+  flex-shrink: 0;
+}
+.go-btn:hover { opacity: .85; }
+.go-btn:active { transform: scale(.97); }
+.go-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .input-row-main { grid-template-columns: 1fr; }
+  .nicks-wrap { flex-direction: column; gap: 8px; }
+  .go-btn { width: 100%; height: 40px; }
 }
 
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field-label {
-  font-size: 10px;
-  color: var(--dim);
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-.player-tag {
-  display: flex; align-items: center; gap: 6px;
-  margin-bottom: 4px;
-}
+/* ─── Input Area (old field/grid removed) ─────────────────────── */
 .ptag {
   font-size: 9px; font-family: var(--font-mono);
   letter-spacing: 1.5px; text-transform: uppercase;
@@ -506,22 +580,24 @@ canvas { width: 100% !important; }
   <!-- Search Card -->
   <div class="card">
     <!-- Mode toggle -->
-    <div style="display:flex;gap:6px;margin-bottom:16px">
-      <button class="mode-btn on" id="modeCmp" onclick="setMode('compare')">비교 모드</button>
-      <button class="mode-btn" id="modeSolo" onclick="setMode('solo')">솔로 모드</button>
+    <div style="display:flex;gap:6px;margin-bottom:18px">
+      <button class="mode-btn on" id="modeSolo" onclick="setMode('solo')">개인 기록</button>
+      <button class="mode-btn" id="modeCmp" onclick="setMode('compare')">라이벌 비교</button>
     </div>
 
-    <div class="input-grid">
-      <div class="field">
-        <div class="player-tag"><span class="ptag p1" id="p1tag">PLAYER 1</span></div>
-        <input type="text" id="n1" placeholder="닉네임 입력" autocomplete="off" />
+    <!-- Single-row input -->
+    <div class="input-row-main">
+      <div class="nicks-wrap">
+        <div class="nick-block">
+          <span class="ptag solo" id="p1tag">PLAYER</span>
+          <input type="text" id="n1" placeholder="닉네임 입력" autocomplete="off" />
+        </div>
+        <div class="nick-block" id="n2field" style="display:none">
+          <span class="ptag p2">RIVAL</span>
+          <input type="text" id="n2" placeholder="닉네임 입력" autocomplete="off" />
+        </div>
       </div>
-      <div class="field" id="n2field">
-        <div class="player-tag"><span class="ptag p2">PLAYER 2</span></div>
-        <input type="text" id="n2" placeholder="닉네임 입력" autocomplete="off" />
-      </div>
-      <div class="field go-col">
-        <div class="field-label">버튼</div>
+      <div class="btn-block">
         <div class="btn-group" id="btnGroup">
           <button class="bbtn" data-b="4">4B</button>
           <button class="bbtn" data-b="5">5B</button>
@@ -529,11 +605,7 @@ canvas { width: 100% !important; }
           <button class="bbtn" data-b="8">8B</button>
         </div>
       </div>
-    </div>
-
-    <!-- Go button separate row -->
-    <div style="margin-top:14px">
-      <button class="go-btn" id="goBtn">비교 시작</button>
+      <button class="go-btn" id="goBtn">조회</button>
     </div>
 
     <!-- Filter area -->
@@ -542,15 +614,13 @@ canvas { width: 100% !important; }
       <div class="filter-group">
         <div class="filter-group-label">패턴</div>
         <div class="chips" id="patChips">
-          <span class="chip" data-p="NM">NM</span>
-          <span class="chip" data-p="HD">HD</span>
-          <span class="chip" data-p="MX">MX</span>
           <span class="chip on" data-p="SC">SC</span>
+          <span class="chip" data-p="non-sc">비SC</span>
         </div>
       </div>
 
       <!-- Display -->
-      <div class="filter-group" id="dispFilter">
+      <div class="filter-group" id="dispFilter" style="display:none">
         <div class="filter-group-label">표시</div>
         <div class="chips">
           <span class="chip on c1" id="dCommon" data-d="common">공통</span>
@@ -708,15 +778,16 @@ canvas { width: 100% !important; }
 let allData = [];
 let selBtn  = 6;
 let sortBy  = 'level';
-let sortDir = 'desc'; // 'asc' | 'desc'
-let mode    = 'compare';
-const pats  = new Set(['SC']);
+let sortDir = 'desc';
+let mode    = 'solo'; // 솔로가 기본
+const pats  = new Set(['SC']); // SC 기본 선택
+let patMode = 'SC'; // 'SC' | 'non-sc'
 const disp  = { common: true, p1: true, p2: true };
 let currentTab = 'table';
 let charts = {};
-let selLvRange = 'all';  // 'all' | '1-5' | '6-10' | '11-15'
-let selFloor   = 'all';  // 'all' | '1-5' | '6-10' | '11+'
-let selMc      = 'all';  // 'all' | 'yes' | 'no'
+let selLvRange = 'all';
+let selFloor   = 'all';
+let selMc      = 'all';
 
 /* ─── Chart defaults ─────────────────────────────────────────── */
 Chart.defaults.color = '#555575';
@@ -740,13 +811,20 @@ function hideStatus() { $('status').classList.remove('show'); }
 /* ─── Mode ───────────────────────────────────────────────────── */
 function setMode(m) {
   mode = m;
-  $('modeCmp').classList.toggle('on', m === 'compare');
   $('modeSolo').classList.toggle('on', m === 'solo');
-  $('n2field').style.display  = m === 'solo' ? 'none' : '';
-  $('p1tag').textContent      = m === 'solo' ? 'PLAYER' : 'PLAYER 1';
-  $('goBtn').textContent      = m === 'solo' ? '조회 시작' : '비교 시작';
+  $('modeCmp').classList.toggle('on',  m === 'compare');
+  $('n2field').style.display    = m === 'solo' ? 'none' : '';
   $('dispFilter').style.display = m === 'solo' ? 'none' : '';
+  const p1tag = $('p1tag');
+  if (m === 'solo') {
+    p1tag.textContent = 'PLAYER';
+    p1tag.className   = 'ptag solo';
+  } else {
+    p1tag.textContent = 'PLAYER 1';
+    p1tag.className   = 'ptag p1';
+  }
 }
+setMode('solo');
 
 /* ─── Filter state ───────────────────────────────────────────── */
 function getLvRange() {
@@ -862,13 +940,14 @@ function refreshSummary() {
 
 /* ─── Populate filters ───────────────────────────────────────── */
 function populateFilters() {
-  // 데이터 로드 후 초기화가 필요한 상태만 리셋
   selFloor   = 'all';
   selLvRange = 'all';
   selMc      = 'all';
+  patMode    = 'SC';
   $('lvRangeChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.lv === 'all'));
   $('floorRangeChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.fl === 'all'));
   $('mcChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.mc === 'all'));
+  $('patChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.p === 'SC'));
 }
 
 /* ─── Filter & sort ──────────────────────────────────────────── */
@@ -876,7 +955,7 @@ function getFiltered() {
   const lvRange = getLvRange();
   const search  = getSearch();
   return allData
-    .filter(d => pats.has(d.pattern))
+    .filter(d => patMode === 'SC' ? d.pattern === 'SC' : d.pattern !== 'SC')
     .filter(d => {
       if (mode === 'solo') return true;
       if (d.r1 && d.r2)  return disp.common;
@@ -887,11 +966,10 @@ function getFiltered() {
     .filter(d => floorInRange(d.floor))
     .filter(d => {
       if (selMc === 'all') return true;
-      // 비교 모드: 둘 중 하나라도 해당하면 표시
       const mc1 = !!d.r1?.maxCombo, mc2 = !!d.r2?.maxCombo;
       if (mode === 'solo') return selMc === 'yes' ? mc1 : !mc1;
       if (selMc === 'yes') return mc1 || mc2;
-      return !mc1 || !mc2; // 미달성: 둘 중 하나라도 미달성
+      return !mc1 || !mc2;
     })
     .filter(d => !search  || (d.name || d.title || '').toLowerCase().includes(search));
 }
@@ -1144,11 +1222,12 @@ document.querySelectorAll('#btnGroup .bbtn').forEach(b => {
   };
 });
 
+// 패턴 버튼 (SC / 비SC 토글)
 document.querySelectorAll('#patChips .chip').forEach(c => {
   c.onclick = () => {
-    const p = c.dataset.p;
-    if (pats.has(p)) { if (pats.size > 1) { pats.delete(p); c.classList.remove('on'); } }
-    else { pats.add(p); c.classList.add('on'); }
+    patMode = c.dataset.p; // 'SC' or 'non-sc'
+    document.querySelectorAll('#patChips .chip').forEach(x => x.classList.remove('on'));
+    c.classList.add('on');
     onFilterChange();
   };
 });
