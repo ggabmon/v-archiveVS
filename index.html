@@ -791,11 +791,11 @@ canvas { width: 100% !important; }
         <div class="thead">
           <div></div><div>곡명 / 패턴</div>
           <div class="h1" style="text-align:right" id="thScore1">P1 SCORE</div>
-          <div class="h1 hc" id="thMc1">MC</div>
+          <div class="h1 hc" id="thMc1">MAX콤보</div>
           <div class="h1" style="text-align:right">BAR</div>
           <div class="hc">DIFF</div>
           <div class="h2">BAR</div>
-          <div class="h2 hc" id="thMc2">MC</div>
+          <div class="h2 hc" id="thMc2">MAX콤보</div>
           <div class="h2" id="thScore2">P2 SCORE</div>
         </div>
         <div id="tbody"></div>
@@ -1203,12 +1203,14 @@ function render() {
   const n2 = $('n2').value.trim() || 'P2';
   if (mode === 'solo') {
     if ($('thScore1')) $('thScore1').textContent = n1;
-    if ($('thMc1'))   $('thMc1').textContent = 'MAX';
+    if ($('thMc1'))   $('thMc1').textContent = 'MAX콤보';
+    if ($('thScore2')) $('thScore2').textContent = '';
+    if ($('thMc2'))   $('thMc2').textContent = '';
   } else {
     if ($('thScore1')) $('thScore1').textContent = n1;
     if ($('thScore2')) $('thScore2').textContent = n2;
-    if ($('thMc1'))   $('thMc1').textContent = 'MAX';
-    if ($('thMc2'))   $('thMc2').textContent = 'MAX';
+    if ($('thMc1'))   $('thMc1').textContent = 'MAX콤보';
+    if ($('thMc2'))   $('thMc2').textContent = 'MAX콤보';
   }
 
   const data = sortData(getFiltered());
@@ -1241,9 +1243,9 @@ function render() {
       row.innerHTML = `
         <div class="rnum">${i+1}</div>
         <div>${meta}</div>
-        <div class="sc" style="color:var(--c1);text-align:right;grid-column:3/6">${s1!==null?s1.toFixed(2):''}</div>
-        <div class="mc" style="grid-column:6">${d.r1?.maxCombo?`<span class="mci" title="${n1} MAX콤보">✦</span>`:''}</div>
-        <div style="grid-column:7/10"><div class="bar"><div class="bf bf1" style="width:${s1??0}%"></div></div></div>`;
+        <div class="sc" style="color:var(--c1);text-align:right">${s1!==null?s1.toFixed(2):''}</div>
+        <div class="mc">${d.r1?.maxCombo?`<span class="mci" title="${n1} MAX콤보">✦</span>`:''}</div>
+        <div style="grid-column:5/10"><div class="bar"><div class="bf bf1" style="width:${s1??0}%"></div></div></div>`;
     } else {
       row.innerHTML = `
         <div class="rnum col-num">${i+1}</div>
