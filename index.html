@@ -98,6 +98,16 @@ header {
   background: linear-gradient(90deg, transparent, var(--c1), var(--c2), transparent);
 }
 
+/* ─── Mode toggle ────────────────────────────────────────────── */
+.mode-btn {
+  background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius);
+  color: var(--dim); cursor: pointer; font-family: var(--font-mono);
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  padding: 6px 16px; transition: all .15s;
+}
+.mode-btn:hover { border-color: var(--c1); color: var(--c1); }
+.mode-btn.on { background: rgba(0,229,255,.1); border-color: var(--c1); color: var(--c1); }
+
 /* ─── Input Area ─────────────────────────────────────────────── */
 .input-grid {
   display: grid;
@@ -501,12 +511,18 @@ canvas { width: 100% !important; }
 
   <!-- Search Card -->
   <div class="card">
+    <!-- Mode toggle -->
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <button class="mode-btn on" id="modeCmp" onclick="setMode('compare')">비교 모드</button>
+      <button class="mode-btn" id="modeSolo" onclick="setMode('solo')">솔로 모드</button>
+    </div>
+
     <div class="input-grid">
       <div class="field">
-        <div class="player-tag"><span class="ptag p1">PLAYER 1</span></div>
+        <div class="player-tag"><span class="ptag p1" id="p1tag">PLAYER 1</span></div>
         <input type="text" id="n1" placeholder="닉네임 입력" autocomplete="off" />
       </div>
-      <div class="field">
+      <div class="field" id="n2field">
         <div class="player-tag"><span class="ptag p2">PLAYER 2</span></div>
         <input type="text" id="n2" placeholder="닉네임 입력" autocomplete="off" />
       </div>
@@ -532,15 +548,15 @@ canvas { width: 100% !important; }
       <div class="filter-group">
         <div class="filter-group-label">패턴</div>
         <div class="chips" id="patChips">
-          <span class="chip on" data-p="NM">NM</span>
-          <span class="chip on" data-p="HD">HD</span>
-          <span class="chip on" data-p="MX">MX</span>
+          <span class="chip" data-p="NM">NM</span>
+          <span class="chip" data-p="HD">HD</span>
+          <span class="chip" data-p="MX">MX</span>
           <span class="chip on" data-p="SC">SC</span>
         </div>
       </div>
 
       <!-- Display -->
-      <div class="filter-group">
+      <div class="filter-group" id="dispFilter">
         <div class="filter-group-label">표시</div>
         <div class="chips">
           <span class="chip on c1" id="dCommon" data-d="common">공통</span>
@@ -588,17 +604,18 @@ canvas { width: 100% !important; }
   <!-- Results -->
   <div id="results">
     <!-- Summary -->
-    <div class="summary">
+    <div class="summary" id="summaryCompare">
       <div class="splayer p1" id="sp1"></div>
       <div class="vs vs-col">VS</div>
       <div class="splayer p2" id="sp2"></div>
     </div>
+    <div class="splayer" id="summarySolo" style="display:none;margin-bottom:20px;border-left:3px solid var(--c1)"></div>
 
     <!-- Tab nav -->
     <div class="tab-nav">
       <button class="tab-btn on" data-tab="table">목록</button>
-      <button class="tab-btn" data-tab="chart">점수 분포</button>
-      <button class="tab-btn" data-tab="stats">레벨별 통계</button>
+      <button class="tab-btn" data-tab="chart" id="tabBtnChart">점수 분포</button>
+      <button class="tab-btn" data-tab="stats" id="tabBtnStats">레벨별 통계</button>
     </div>
 
     <!-- Table tab -->
@@ -685,9 +702,10 @@ canvas { width: 100% !important; }
 <script>
 /* ─── State ─────────────────────────────────────────────────── */
 let allData = [];
-let selBtn = 6;
+let selBtn  = 6;
 let sortBy  = 'name';
-const pats = new Set(['NM','HD','MX','SC']);
+let mode    = 'compare'; // 'compare' | 'solo'
+const pats  = new Set(['SC']);
 const disp  = { common: true, p1: true, p2: true };
 let currentTab = 'table';
 let charts = {};
@@ -711,15 +729,26 @@ function showStatus(msg, loading = true) {
 }
 function hideStatus() { $('status').classList.remove('show'); }
 
-/* ─── Filter state from DOM ──────────────────────────────────── */
-function getLvMin() { return $('lvMin').value ? +$('lvMin').value : null; }
-function getLvMax() { return $('lvMax').value ? +$('lvMax').value : null; }
-function getFloor() { return $('floorSel').value || null; }
+/* ─── Mode ───────────────────────────────────────────────────── */
+function setMode(m) {
+  mode = m;
+  $('modeCmp').classList.toggle('on', m === 'compare');
+  $('modeSolo').classList.toggle('on', m === 'solo');
+  $('n2field').style.display  = m === 'solo' ? 'none' : '';
+  $('p1tag').textContent      = m === 'solo' ? 'PLAYER' : 'PLAYER 1';
+  $('goBtn').textContent      = m === 'solo' ? '조회 시작' : '비교 시작';
+  $('dispFilter').style.display = m === 'solo' ? 'none' : '';
+}
+
+/* ─── Filter state ───────────────────────────────────────────── */
+function getLvMin()  { return $('lvMin').value  ? +$('lvMin').value  : null; }
+function getLvMax()  { return $('lvMax').value  ? +$('lvMax').value  : null; }
+function getFloor()  { return $('floorSel').value || null; }
 function getSearch() { return $('songSearch').value.trim().toLowerCase(); }
 
 /* ─── Fetch ──────────────────────────────────────────────────── */
 async function fetchData(nick, btn) {
-  const res = await fetch(`/api/varchive?path=archive/${encodeURIComponent(nick)}/button/${btn}`);
+  const res  = await fetch(`/api/varchive?path=archive/${encodeURIComponent(nick)}/button/${btn}`);
   const data = await res.json();
   if (!data.success) throw new Error(data.message || '유저를 찾을 수 없습니다');
   return data.records;
@@ -728,62 +757,49 @@ async function fetchData(nick, btn) {
 /* ─── Main search ─────────────────────────────────────────────── */
 async function doSearch() {
   const n1 = $('n1').value.trim();
-  const n2 = $('n2').value.trim();
-  if (!n1 || !n2) { showStatus('두 닉네임을 모두 입력해주세요.', false); return; }
+  const n2 = mode === 'compare' ? $('n2').value.trim() : null;
+
+  if (!n1) { showStatus('닉네임을 입력해주세요.', false); return; }
+  if (mode === 'compare' && !n2) { showStatus('두 닉네임을 모두 입력해주세요.', false); return; }
 
   showStatus('데이터를 불러오는 중...');
   $('goBtn').disabled = true;
 
   try {
-    const [r1, r2] = await Promise.all([fetchData(n1, selBtn), fetchData(n2, selBtn)]);
-
-    /* merge */
-    const m1 = new Map(), m2 = new Map();
-    r1.forEach(r => m1.set(`${r.title}|${r.pattern}`, r));
-    r2.forEach(r => m2.set(`${r.title}|${r.pattern}`, r));
-
-    const keys = new Set([...m1.keys(), ...m2.keys()]);
-    allData = [];
-    keys.forEach(k => {
-      const a = m1.get(k) ?? null, b = m2.get(k) ?? null, base = a ?? b;
-      allData.push({
-        key: k,
-        title: base.title,
-        name: base.name,
-        pattern: base.pattern,
-        level: base.level,
-        floor: base.floor,
-        floorName: base.floorName,
-        r1: a, r2: b
+    if (mode === 'solo') {
+      const r1 = await fetchData(n1, selBtn);
+      allData = r1.map(r => ({
+        key: `${r.title}|${r.pattern}`, title: r.title, name: r.name,
+        pattern: r.pattern, level: r.level, floor: r.floor, floorName: r.floorName,
+        r1: r, r2: null
+      }));
+      populateFilters();
+      hideStatus();
+      $('results').classList.add('show');
+      $('tabBtnChart').style.display = 'none';
+      $('tabBtnStats').style.display = 'none';
+      if (currentTab !== 'table') switchTab('table');
+    } else {
+      const [r1, r2] = await Promise.all([fetchData(n1, selBtn), fetchData(n2, selBtn)]);
+      const m1 = new Map(), m2 = new Map();
+      r1.forEach(r => m1.set(`${r.title}|${r.pattern}`, r));
+      r2.forEach(r => m2.set(`${r.title}|${r.pattern}`, r));
+      const keys = new Set([...m1.keys(), ...m2.keys()]);
+      allData = [];
+      keys.forEach(k => {
+        const a = m1.get(k) ?? null, b = m2.get(k) ?? null, base = a ?? b;
+        allData.push({ key: k, title: base.title, name: base.name,
+          pattern: base.pattern, level: base.level, floor: base.floor, floorName: base.floorName,
+          r1: a, r2: b });
       });
-    });
-
-    /* wins */
-    let w1 = 0, w2 = 0;
-    allData.forEach(d => {
-      if (d.r1 && d.r2) {
-        if (d.r1.score > d.r2.score) w1++;
-        else if (d.r2.score > d.r1.score) w2++;
-      }
-    });
-
-    $('sp1').innerHTML = `
-      <div class="sname">${n1}</div>
-      <div class="sstat">승리 <b>${w1}</b>곡</div>
-      <div class="sstat">기록 <b>${r1.length}</b>곡</div>`;
-    $('sp2').innerHTML = `
-      <div class="sname">${n2}</div>
-      <div class="sstat">승리 <b>${w2}</b>곡</div>
-      <div class="sstat">기록 <b>${r2.length}</b>곡</div>`;
-
-    /* populate filter options */
-    populateFilters();
-
-    hideStatus();
-    $('results').classList.add('show');
+      populateFilters();
+      hideStatus();
+      $('results').classList.add('show');
+      $('tabBtnChart').style.display = '';
+      $('tabBtnStats').style.display = '';
+    }
     render();
-    renderStats();
-    renderCharts();
+    if (mode === 'compare') { renderStats(); renderCharts(); }
   } catch(e) {
     showStatus('오류: ' + e.message, false);
   } finally {
@@ -791,38 +807,61 @@ async function doSearch() {
   }
 }
 
-/* ─── Populate level & floor selects ─────────────────────────── */
+/* ─── Summary ────────────────────────────────────────────────── */
+function refreshSummary() {
+  if (!$('results').classList.contains('show')) return;
+  const filtered = getFiltered();
+  const n1 = $('n1').value.trim();
+
+  if (mode === 'solo') {
+    $('summaryCompare').style.display = 'none';
+    $('summarySolo').style.display = '';
+    const mc = filtered.filter(d => d.r1?.maxCombo).length;
+    $('summarySolo').innerHTML = `
+      <div class="sname">${n1}</div>
+      <div class="sstat">전체 기록 <b>${allData.length}</b>곡 &nbsp;·&nbsp; 현재 필터 <b>${filtered.length}</b>곡</div>
+      <div class="sstat">맥콤보 <b style="color:var(--gold)">${mc}</b></div>`;
+  } else {
+    $('summaryCompare').style.display = '';
+    $('summarySolo').style.display = 'none';
+    const n2 = $('n2').value.trim();
+    const common = filtered.filter(d => d.r1 && d.r2);
+    const w1 = common.filter(d => d.r1.score > d.r2.score).length;
+    const w2 = common.filter(d => d.r2.score > d.r1.score).length;
+    $('sp1').innerHTML = `<div class="sname">${n1}</div>
+      <div class="sstat">승리 <b style="color:var(--c1)">${w1}</b>곡 (필터 기준)</div>
+      <div class="sstat">전체 기록 <b>${allData.filter(d=>d.r1).length}</b>곡</div>`;
+    $('sp2').innerHTML = `<div class="sname">${n2}</div>
+      <div class="sstat">승리 <b style="color:var(--c2)">${w2}</b>곡 (필터 기준)</div>
+      <div class="sstat">전체 기록 <b>${allData.filter(d=>d.r2).length}</b>곡</div>`;
+  }
+}
+
+/* ─── Populate filters ───────────────────────────────────────── */
 function populateFilters() {
-  const levels  = [...new Set(allData.map(d => d.level).filter(Boolean))].sort((a,b)=>a-b);
+  const levels = [...new Set(allData.map(d => d.level).filter(Boolean))].sort((a,b)=>a-b);
   const floorMap = new Map();
   allData.forEach(d => { if (d.floor != null) floorMap.set(d.floor, d.floorName || `${d.floor}층`); });
   const floors = [...floorMap.entries()].sort((a,b)=>a[0]-b[0]);
 
-  const lvMin = $('lvMin'), lvMax = $('lvMax');
-  lvMin.innerHTML = '<option value="">MIN</option>';
-  lvMax.innerHTML = '<option value="">MAX</option>';
+  $('lvMin').innerHTML = '<option value="">MIN</option>';
+  $('lvMax').innerHTML = '<option value="">MAX</option>';
   levels.forEach(l => {
-    lvMin.insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
-    lvMax.insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
+    $('lvMin').insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
+    $('lvMax').insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
   });
-
-  const floorSel = $('floorSel');
-  floorSel.innerHTML = '<option value="">전체</option>';
-  floors.forEach(([fv, fn]) => {
-    floorSel.insertAdjacentHTML('beforeend', `<option value="${fv}">${fn}</option>`);
-  });
+  $('floorSel').innerHTML = '<option value="">전체</option>';
+  floors.forEach(([fv, fn]) => $('floorSel').insertAdjacentHTML('beforeend', `<option value="${fv}">${fn}</option>`));
 }
 
-/* ─── Filter & sort data ─────────────────────────────────────── */
+/* ─── Filter & sort ──────────────────────────────────────────── */
 function getFiltered() {
-  const lvMin = getLvMin(), lvMax = getLvMax();
-  const floor = getFloor();
-  const search = getSearch();
-
+  const lvMin = getLvMin(), lvMax = getLvMax(), floor = getFloor(), search = getSearch();
   return allData
     .filter(d => pats.has(d.pattern))
     .filter(d => {
-      if (d.r1 && d.r2) return disp.common;
+      if (mode === 'solo') return true;
+      if (d.r1 && d.r2)  return disp.common;
       if (d.r1 && !d.r2) return disp.p1;
       return disp.p2;
     })
@@ -851,6 +890,7 @@ function sortData(data) {
 
 /* ─── Render table ────────────────────────────────────────────── */
 function render() {
+  refreshSummary();
   if (currentTab !== 'table') return;
   const data = sortData(getFiltered());
   $('tcount').textContent = `${data.length}개 패턴`;
@@ -858,297 +898,223 @@ function render() {
   const frag = document.createDocumentFragment();
   data.forEach((d, i) => {
     const s1 = d.r1?.score ?? null, s2 = d.r2?.score ?? null;
-    let c1 = 'draw', c2 = 'draw', dcls = 'dz', dtxt = '—';
-    let mdc = 'dz';
-    if (s1 !== null && s2 !== null) {
+    let c1 = 'draw', c2 = 'draw', dcls = 'dz', dtxt = '—', mdc = 'dz';
+    if (mode !== 'solo' && s1 !== null && s2 !== null) {
       const diff = s1 - s2;
-      if (diff > 0)       { c1='win'; c2='lose'; dcls='dp'; mdc='dp'; dtxt='+'+diff.toFixed(2); }
-      else if (diff < 0)  { c1='lose'; c2='win'; dcls='dm'; mdc='dm'; dtxt=diff.toFixed(2); }
-      else                 { dtxt='±0'; }
-    } else if (s1===null && s2!==null) c2='win';
-    else if (s2===null && s1!==null)   c1='win';
+      if (diff > 0)      { c1='win'; c2='lose'; dcls='dp'; mdc='dp'; dtxt='+'+diff.toFixed(2); }
+      else if (diff < 0) { c1='lose'; c2='win'; dcls='dm'; mdc='dm'; dtxt=diff.toFixed(2); }
+      else               { dtxt='±0'; }
+    } else if (mode !== 'solo') {
+      if (s1===null && s2!==null) c2='win';
+      else if (s2===null && s1!==null) c1='win';
+    }
 
     const row = document.createElement('div');
     row.className = `trow${!d.r1?' op2':!d.r2?' op1':''}`;
-    row.innerHTML = `
-      <div class="rnum col-num">${i+1}</div>
-      <div class="col-song">
-        <div class="sname2" title="${d.name||d.title}">${d.name||d.title}</div>
-        <div class="smeta">
-          <span class="pat ${d.pattern}">${d.pattern}</span>
-          <span class="lv">Lv.${d.level}</span>
-          ${d.floorName ? `<span class="fl">★${d.floorName}</span>` : ''}
+    const meta = `<div class="sname2" title="${d.name||d.title}">${d.name||d.title}</div>
+      <div class="smeta">
+        <span class="pat ${d.pattern}">${d.pattern}</span>
+        <span class="lv">Lv.${d.level}</span>
+        ${d.floorName ? `<span class="fl">★${d.floorName}</span>` : ''}
+      </div>`;
+
+    if (mode === 'solo') {
+      row.innerHTML = `
+        <div class="rnum">${i+1}</div>
+        <div>${meta}</div>
+        <div class="sc" style="color:var(--c1);text-align:right;grid-column:3/6">${s1!==null?s1.toFixed(2):'N/A'}</div>
+        <div class="mc" style="grid-column:6">${d.r1?.maxCombo?'<span class="mci">✦</span>':''}</div>
+        <div style="grid-column:7/10"><div class="bar"><div class="bf bf1" style="width:${s1??0}%"></div></div></div>`;
+    } else {
+      row.innerHTML = `
+        <div class="rnum col-num">${i+1}</div>
+        <div class="col-song">${meta}
+          <div class="mobile-scores">
+            <span class="ms1">${s1!==null?s1.toFixed(2):'N/A'}</span>
+            <span class="ms-sep">vs</span>
+            <span class="ms2">${s2!==null?s2.toFixed(2):'N/A'}</span>
+            ${dtxt!=='—'?`<span class="ms-diff ${mdc}">${dtxt}</span>`:''}
+          </div>
         </div>
-        <div class="mobile-scores">
-          <span class="ms1">${s1!==null?s1.toFixed(2):'N/A'}</span>
-          <span class="ms-sep">vs</span>
-          <span class="ms2">${s2!==null?s2.toFixed(2):'N/A'}</span>
-          ${dtxt!=='—'?`<span class="ms-diff ${mdc}">${dtxt}</span>`:''}
-        </div>
-      </div>
-      <div class="sc ${s1!==null?c1:'na'} col-sc1">${s1!==null?s1.toFixed(2):'N/A'}</div>
-      <div class="mc col-mc1">${d.r1?.maxCombo?'<span class="mci">✦</span>':''}</div>
-      <div class="bar col-bar1"><div class="bf bf1" style="width:${s1??0}%"></div></div>
-      <div class="diff ${dcls} col-diff">${dtxt}</div>
-      <div class="bar col-bar2"><div class="bf bf2" style="width:${s2??0}%"></div></div>
-      <div class="mc col-mc2">${d.r2?.maxCombo?'<span class="mci">✦</span>':''}</div>
-      <div class="sc p2s ${s2!==null?c2:'na'} col-sc2">${s2!==null?s2.toFixed(2):'N/A'}</div>
-    `;
+        <div class="sc ${s1!==null?c1:'na'} col-sc1">${s1!==null?s1.toFixed(2):'N/A'}</div>
+        <div class="mc col-mc1">${d.r1?.maxCombo?'<span class="mci">✦</span>':''}</div>
+        <div class="bar col-bar1"><div class="bf bf1" style="width:${s1??0}%"></div></div>
+        <div class="diff ${dcls} col-diff">${dtxt}</div>
+        <div class="bar col-bar2"><div class="bf bf2" style="width:${s2??0}%"></div></div>
+        <div class="mc col-mc2">${d.r2?.maxCombo?'<span class="mci">✦</span>':''}</div>
+        <div class="sc p2s ${s2!==null?c2:'na'} col-sc2">${s2!==null?s2.toFixed(2):'N/A'}</div>`;
+    }
     frag.appendChild(row);
   });
-
   const tbody = $('tbody');
   tbody.innerHTML = '';
   tbody.appendChild(frag);
 }
 
-/* ─── Render stats ────────────────────────────────────────────── */
+/* ─── Render stats (필터 기반) ────────────────────────────────── */
 function renderStats() {
-  const common = allData.filter(d => d.r1 && d.r2);
+  const filtered = getFiltered();
+  const common   = filtered.filter(d => d.r1 && d.r2);
+  const n1 = $('n1').value.trim(), n2 = $('n2').value.trim();
 
-  /* by level */
+  /* level */
   const lvMap = new Map();
   common.forEach(d => {
-    const lv = d.level;
-    if (!lv) return;
-    if (!lvMap.has(lv)) lvMap.set(lv, {w1:0,w2:0,draw:0});
-    const e = lvMap.get(lv);
+    if (!d.level) return;
+    if (!lvMap.has(d.level)) lvMap.set(d.level, {w1:0,w2:0,draw:0});
+    const e = lvMap.get(d.level);
     if (d.r1.score > d.r2.score) e.w1++;
     else if (d.r2.score > d.r1.score) e.w2++;
     else e.draw++;
   });
-  const lvKeys = [...lvMap.keys()].sort((a,b)=>a-b);
-  $('statsLevelBody').innerHTML = lvKeys.map(lv => {
-    const e = lvMap.get(lv);
-    const total = e.w1 + e.w2 + e.draw;
+  $('statsLevelBody').innerHTML = [...lvMap.keys()].sort((a,b)=>a-b).map(lv => {
+    const e = lvMap.get(lv), total = e.w1+e.w2+e.draw;
     const p1w = total ? Math.round(e.w1/total*100) : 50;
-    const p2w = total ? Math.round(e.w2/total*100) : 50;
     const wcls = e.w1>e.w2?'w1':e.w2>e.w1?'w2':'eq';
     return `<div class="level-row">
       <div class="lv-num">${lv}</div>
-      <div style="grid-column:2/4">
-        <div class="lv-bar-wrap">
-          <div class="lv-bar-p1" style="width:${p1w}%"></div>
-          <div class="lv-bar-p2" style="width:${p2w}%"></div>
-        </div>
-      </div>
+      <div style="grid-column:2/4"><div class="lv-bar-wrap">
+        <div class="lv-bar-p1" style="width:${p1w}%"></div>
+        <div class="lv-bar-p2" style="width:${100-p1w}%"></div>
+      </div></div>
       <div class="lv-val ${wcls}">${e.w1}/${e.draw}/${e.w2}</div>
     </div>`;
-  }).join('');
+  }).join('') || '<div style="color:var(--dim);font-size:12px;padding:12px 0">데이터 없음</div>';
 
-  /* by pattern */
-  const patKeys = ['NM','HD','MX','SC'];
-  $('statsPatBody').innerHTML = patKeys.map(pat => {
+  /* pattern */
+  $('statsPatBody').innerHTML = ['NM','HD','MX','SC'].map(pat => {
     const pd = common.filter(d=>d.pattern===pat);
     if (!pd.length) return '';
-    const w1 = pd.filter(d=>d.r1.score>d.r2.score).length;
-    const w2 = pd.filter(d=>d.r2.score>d.r1.score).length;
-    const dr = pd.length - w1 - w2;
-    const p1p = pd.length ? Math.round(w1/pd.length*100) : 50;
-    const wcls = w1>w2?'w1':w2>w1?'w2':'eq';
+    const w1=pd.filter(d=>d.r1.score>d.r2.score).length;
+    const w2=pd.filter(d=>d.r2.score>d.r1.score).length;
+    const dr=pd.length-w1-w2;
+    const p1p=pd.length?Math.round(w1/pd.length*100):50;
+    const wcls=w1>w2?'w1':w2>w1?'w2':'eq';
     return `<div class="level-row">
       <div class="lv-num"><span class="pat ${pat}">${pat}</span></div>
-      <div style="grid-column:2/4">
-        <div class="lv-bar-wrap">
-          <div class="lv-bar-p1" style="width:${p1p}%"></div>
-          <div class="lv-bar-p2" style="width:${100-p1p}%"></div>
-        </div>
-      </div>
+      <div style="grid-column:2/4"><div class="lv-bar-wrap">
+        <div class="lv-bar-p1" style="width:${p1p}%"></div>
+        <div class="lv-bar-p2" style="width:${100-p1p}%"></div>
+      </div></div>
       <div class="lv-val ${wcls}">${w1}/${dr}/${w2}</div>
     </div>`;
-  }).join('');
+  }).join('') || '<div style="color:var(--dim);font-size:12px;padding:12px 0">데이터 없음</div>';
 
   /* summary */
-  const totalCommon = common.length;
-  const totalW1 = common.filter(d=>d.r1.score>d.r2.score).length;
-  const totalW2 = common.filter(d=>d.r2.score>d.r1.score).length;
-  const totalDr = totalCommon - totalW1 - totalW2;
-  const avgD = common.reduce((s,d)=>s+(d.r1.score-d.r2.score),0) / (totalCommon||1);
-  const n1 = $('n1').value.trim(), n2 = $('n2').value.trim();
-  const mcP1 = allData.filter(d=>d.r1?.maxCombo).length;
-  const mcP2 = allData.filter(d=>d.r2?.maxCombo).length;
-
-  $('statsSummary').innerHTML = `
-    <div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px">
-      <div style="color:var(--dim)">공통 곡 수</div><div style="text-align:right;color:var(--text)">${totalCommon}</div>
-    </div>
-    <div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px">
-      <div style="color:var(--c1)">${n1} 승</div><div style="text-align:right;color:var(--c1)">${totalW1}</div>
-    </div>
-    <div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px">
-      <div style="color:var(--dim)">무승부</div><div style="text-align:right;color:var(--dim)">${totalDr}</div>
-    </div>
-    <div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px">
-      <div style="color:var(--c2)">${n2} 승</div><div style="text-align:right;color:var(--c2)">${totalW2}</div>
-    </div>
-    <div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px">
-      <div style="color:var(--dim)">평균 점수차</div>
-      <div style="text-align:right;font-family:var(--font-mono);font-size:11px;color:${avgD>=0?'var(--c1)':'var(--c2)'}">${avgD>=0?'+':''}${avgD.toFixed(2)}</div>
-    </div>
-    <div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px">
-      <div style="color:var(--dim)">${n1} 맥콤보</div><div style="text-align:right;color:var(--gold)">${mcP1}</div>
-    </div>
-    <div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px;border-bottom:none">
-      <div style="color:var(--dim)">${n2} 맥콤보</div><div style="text-align:right;color:var(--gold)">${mcP2}</div>
-    </div>
-  `;
+  const tw1=common.filter(d=>d.r1.score>d.r2.score).length;
+  const tw2=common.filter(d=>d.r2.score>d.r1.score).length;
+  const tdr=common.length-tw1-tw2;
+  const avgD=common.length?common.reduce((s,d)=>s+(d.r1.score-d.r2.score),0)/common.length:0;
+  const mc1=filtered.filter(d=>d.r1?.maxCombo).length;
+  const mc2=filtered.filter(d=>d.r2?.maxCombo).length;
+  const row=(label,val,color='var(--text)')=>
+    `<div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px">
+      <div style="color:var(--dim)">${label}</div>
+      <div style="text-align:right;color:${color};font-family:var(--font-mono)">${val}</div>
+    </div>`;
+  $('statsSummary').innerHTML =
+    row('공통 곡 수', common.length) +
+    row(`${n1} 승`, tw1, 'var(--c1)') +
+    row('무승부', tdr, 'var(--dim)') +
+    row(`${n2} 승`, tw2, 'var(--c2)') +
+    row('평균 점수차', `${avgD>=0?'+':''}${avgD.toFixed(2)}`, avgD>=0?'var(--c1)':'var(--c2)') +
+    row(`${n1} 맥콤보`, mc1, 'var(--gold)') +
+    `<div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px;border-bottom:none">
+      <div style="color:var(--dim)">${n2} 맥콤보</div>
+      <div style="text-align:right;color:var(--gold);font-family:var(--font-mono)">${mc2}</div>
+    </div>`;
 }
 
-/* ─── Render charts ──────────────────────────────────────────── */
+/* ─── Render charts (필터 기반) ──────────────────────────────── */
 function renderCharts() {
-  const common = allData.filter(d => d.r1 && d.r2);
-
-  /* destroy old */
+  const common = getFiltered().filter(d => d.r1 && d.r2);
   Object.values(charts).forEach(c => c.destroy());
   charts = {};
 
-  /* 1. Scatter: score distribution */
-  const scatterData = common.map(d => ({ x: d.r1.score, y: d.r2.score, label: d.name }));
+  const scatter = common.map(d => ({ x: d.r1.score, y: d.r2.score, label: d.name }));
   charts.dist = new Chart($('chartDist'), {
     type: 'scatter',
-    data: {
-      datasets: [{
-        label: 'P1 vs P2',
-        data: scatterData,
-        pointBackgroundColor: scatterData.map(p => p.x > p.y ? C1a : p.x < p.y ? C2a : 'rgba(255,255,255,.3)'),
-        pointBorderColor: 'transparent',
-        pointRadius: 4,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false }, tooltip: {
-        callbacks: { label: ctx => `${ctx.raw.label}: ${ctx.raw.x.toFixed(1)} / ${ctx.raw.y.toFixed(1)}` }
-      }},
-      scales: {
-        x: { title: { display: true, text: 'P1 Score', color: C1 }, grid: { color: '#1c1c2e' } },
-        y: { title: { display: true, text: 'P2 Score', color: C2 }, grid: { color: '#1c1c2e' } }
-      }
-    }
+    data: { datasets: [{ data: scatter,
+      pointBackgroundColor: scatter.map(p => p.x>p.y?C1a:p.x<p.y?C2a:'rgba(255,255,255,.3)'),
+      pointBorderColor: 'transparent', pointRadius: 4 }] },
+    options: { responsive: true, plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.raw.label}: ${ctx.raw.x.toFixed(1)} / ${ctx.raw.y.toFixed(1)}` }}},
+      scales: { x: { title:{display:true,text:'P1 Score',color:C1}, grid:{color:'#1c1c2e'} },
+                y: { title:{display:true,text:'P2 Score',color:C2}, grid:{color:'#1c1c2e'} } }}
   });
 
-  /* 2. Diff histogram */
   const diffs = common.map(d => d.r1.score - d.r2.score);
   const binSize = 5, bins = {};
-  diffs.forEach(d => {
-    const b = Math.floor(d / binSize) * binSize;
-    bins[b] = (bins[b]||0) + 1;
-  });
+  diffs.forEach(d => { const b=Math.floor(d/binSize)*binSize; bins[b]=(bins[b]||0)+1; });
   const binKeys = Object.keys(bins).map(Number).sort((a,b)=>a-b);
   charts.diff = new Chart($('chartDiff'), {
     type: 'bar',
-    data: {
-      labels: binKeys.map(k => `${k>=0?'+':''}${k}`),
-      datasets: [{
-        label: '곡 수',
-        data: binKeys.map(k => bins[k]),
-        backgroundColor: binKeys.map(k => k > 0 ? C1a : k < 0 ? C2a : 'rgba(255,255,255,.2)'),
-        borderColor: binKeys.map(k => k > 0 ? C1 : k < 0 ? C2 : '#fff'),
-        borderWidth: 1,
-        borderRadius: 3,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { color: '#1c1c2e' } },
-        y: { grid: { color: '#1c1c2e' }, beginAtZero: true, ticks: { precision: 0 } }
-      }
-    }
+    data: { labels: binKeys.map(k=>`${k>=0?'+':''}${k}`), datasets: [{ data: binKeys.map(k=>bins[k]),
+      backgroundColor: binKeys.map(k=>k>0?C1a:k<0?C2a:'rgba(255,255,255,.2)'),
+      borderColor: binKeys.map(k=>k>0?C1:k<0?C2:'#fff'), borderWidth:1, borderRadius:3 }] },
+    options: { responsive:true, plugins:{legend:{display:false}},
+      scales: { x:{grid:{color:'#1c1c2e'}}, y:{grid:{color:'#1c1c2e'},beginAtZero:true,ticks:{precision:0}} }}
   });
 
-  /* 3. Pattern avg */
   const patKeys = ['NM','HD','MX','SC'];
-  const patAvg1 = patKeys.map(p => {
-    const pd = common.filter(d=>d.pattern===p);
-    return pd.length ? pd.reduce((s,d)=>s+d.r1.score,0)/pd.length : null;
-  });
-  const patAvg2 = patKeys.map(p => {
-    const pd = common.filter(d=>d.pattern===p);
-    return pd.length ? pd.reduce((s,d)=>s+d.r2.score,0)/pd.length : null;
-  });
   charts.pat = new Chart($('chartPat'), {
     type: 'bar',
-    data: {
-      labels: patKeys,
-      datasets: [
-        { label: 'P1', data: patAvg1, backgroundColor: C1a, borderColor: C1, borderWidth: 1, borderRadius: 4 },
-        { label: 'P2', data: patAvg2, backgroundColor: C2a, borderColor: C2, borderWidth: 1, borderRadius: 4 }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { labels: { color: '#dde0f0' } } },
-      scales: {
-        x: { grid: { color: '#1c1c2e' } },
-        y: { grid: { color: '#1c1c2e' }, min: 80 }
-      }
-    }
+    data: { labels: patKeys, datasets: [
+      { label:'P1', data: patKeys.map(p=>{ const pd=common.filter(d=>d.pattern===p); return pd.length?pd.reduce((s,d)=>s+d.r1.score,0)/pd.length:null; }), backgroundColor:C1a, borderColor:C1, borderWidth:1, borderRadius:4 },
+      { label:'P2', data: patKeys.map(p=>{ const pd=common.filter(d=>d.pattern===p); return pd.length?pd.reduce((s,d)=>s+d.r2.score,0)/pd.length:null; }), backgroundColor:C2a, borderColor:C2, borderWidth:1, borderRadius:4 }
+    ]},
+    options: { responsive:true, plugins:{legend:{labels:{color:'#dde0f0'}}},
+      scales:{ x:{grid:{color:'#1c1c2e'}}, y:{grid:{color:'#1c1c2e'},min:80} }}
   });
 
-  /* 4. Level avg */
   const lvKeys = [...new Set(common.map(d=>d.level).filter(Boolean))].sort((a,b)=>a-b);
-  const lvAvg1 = lvKeys.map(lv => {
-    const pd = common.filter(d=>d.level===lv);
-    return pd.reduce((s,d)=>s+d.r1.score,0)/pd.length;
-  });
-  const lvAvg2 = lvKeys.map(lv => {
-    const pd = common.filter(d=>d.level===lv);
-    return pd.reduce((s,d)=>s+d.r2.score,0)/pd.length;
-  });
   charts.lv = new Chart($('chartLv'), {
     type: 'line',
-    data: {
-      labels: lvKeys,
-      datasets: [
-        { label: 'P1', data: lvAvg1, borderColor: C1, backgroundColor: 'rgba(0,229,255,.08)', tension: .3, pointRadius: 3, fill: true },
-        { label: 'P2', data: lvAvg2, borderColor: C2, backgroundColor: 'rgba(255,61,110,.08)', tension: .3, pointRadius: 3, fill: true }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { labels: { color: '#dde0f0' } } },
-      scales: {
-        x: { grid: { color: '#1c1c2e' } },
-        y: { grid: { color: '#1c1c2e' } }
-      }
-    }
+    data: { labels: lvKeys, datasets: [
+      { label:'P1', data:lvKeys.map(lv=>{ const pd=common.filter(d=>d.level===lv); return pd.reduce((s,d)=>s+d.r1.score,0)/pd.length; }), borderColor:C1, backgroundColor:'rgba(0,229,255,.08)', tension:.3, pointRadius:3, fill:true },
+      { label:'P2', data:lvKeys.map(lv=>{ const pd=common.filter(d=>d.level===lv); return pd.reduce((s,d)=>s+d.r2.score,0)/pd.length; }), borderColor:C2, backgroundColor:'rgba(255,61,110,.08)', tension:.3, pointRadius:3, fill:true }
+    ]},
+    options: { responsive:true, plugins:{legend:{labels:{color:'#dde0f0'}}},
+      scales:{ x:{grid:{color:'#1c1c2e'}}, y:{grid:{color:'#1c1c2e'}} }}
   });
 }
 
-/* ─── Event wiring ───────────────────────────────────────────── */
+/* ─── Tab switch ─────────────────────────────────────────────── */
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('tabTable').classList.toggle('show', tab === 'table');
+  $('tabChart').classList.toggle('show', tab === 'chart');
+  $('tabStats').classList.toggle('show', tab === 'stats');
+  if (tab === 'table') render();
+  else if (tab === 'stats') renderStats();
+  else if (tab === 'chart') renderCharts();
+}
 
-/* button group */
+/* ─── Event wiring ───────────────────────────────────────────── */
 document.querySelectorAll('#btnGroup .bbtn').forEach(b => {
   b.onclick = () => {
     document.querySelectorAll('#btnGroup .bbtn').forEach(x => x.classList.remove('on'));
-    b.classList.add('on');
-    selBtn = +b.dataset.b;
+    b.classList.add('on'); selBtn = +b.dataset.b;
   };
 });
 
-/* pattern chips */
 document.querySelectorAll('#patChips .chip').forEach(c => {
   c.onclick = () => {
     const p = c.dataset.p;
     if (pats.has(p)) { if (pats.size > 1) { pats.delete(p); c.classList.remove('on'); } }
     else { pats.add(p); c.classList.add('on'); }
-    render();
+    onFilterChange();
   };
 });
 
-/* display chips */
 document.querySelectorAll('[data-d]').forEach(c => {
   c.onclick = () => {
-    const k = c.dataset.d;
-    disp[k] = !disp[k];
-    c.classList.toggle('on', disp[k]);
-    render();
+    const k = c.dataset.d; disp[k] = !disp[k];
+    c.classList.toggle('on', disp[k]); onFilterChange();
   };
 });
 
-/* sort buttons */
 document.querySelectorAll('.sbtn').forEach(b => {
   b.onclick = () => {
     sortBy = b.dataset.s;
@@ -1157,29 +1123,22 @@ document.querySelectorAll('.sbtn').forEach(b => {
   };
 });
 
-/* level / floor / search */
-$('lvMin').addEventListener('change', render);
-$('lvMax').addEventListener('change', render);
-$('floorSel').addEventListener('change', render);
-$('songSearch').addEventListener('input', render);
+function onFilterChange() {
+  render();
+  if (currentTab === 'stats') renderStats();
+  if (currentTab === 'chart') renderCharts();
+}
 
-/* go button */
+$('lvMin').addEventListener('change', onFilterChange);
+$('lvMax').addEventListener('change', onFilterChange);
+$('floorSel').addEventListener('change', onFilterChange);
+$('songSearch').addEventListener('input', onFilterChange);
+
 $('goBtn').onclick = doSearch;
-
-/* enter key */
 [$('n1'), $('n2')].forEach(el => el.addEventListener('keydown', e => e.key === 'Enter' && doSearch()));
 
-/* tabs */
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.onclick = () => {
-    const tab = btn.dataset.tab;
-    currentTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-    $('tabTable').classList.toggle('show', tab === 'table');
-    $('tabChart').classList.toggle('show', tab === 'chart');
-    $('tabStats').classList.toggle('show', tab === 'stats');
-    if (tab === 'table') render();
-  };
+  btn.onclick = () => switchTab(btn.dataset.tab);
 });
 </script>
 </body>
