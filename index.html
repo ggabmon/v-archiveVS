@@ -246,15 +246,7 @@ input[type=text]::placeholder { color: var(--dim2); }
 .search-input:focus { border-color: var(--c1); }
 .search-input::placeholder { color: var(--dim2); }
 
-/* level / floor select */
-.sel-group { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
-select.filter-sel {
-  background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius);
-  color: var(--text); font-family: var(--font-mono); font-size: 11px;
-  padding: 4px 10px; cursor: pointer; outline: none;
-  transition: border-color .2s;
-}
-select.filter-sel:focus { border-color: var(--c1); }
+/* (select filter deprecated - using chip buttons instead) */
 
 /* ─── Status ─────────────────────────────────────────────────── */
 .status { text-align: center; padding: 60px 20px; color: var(--dim); font-size: 14px; display: none; }
@@ -389,9 +381,11 @@ canvas { width: 100% !important; }
 .slabel { font-size: 9px; color: var(--dim); letter-spacing: 1.5px; text-transform: uppercase; font-family: var(--font-mono); }
 .sbtn {
   background: var(--bg); border: 1px solid var(--border2); border-radius: 4px;
-  color: var(--dim); cursor: pointer; font-size: 10px; font-family: var(--font-mono);
-  padding: 3px 9px; transition: all .15s;
+  color: var(--dim); cursor: pointer; font-size: 12px; font-family: var(--font-mono);
+  padding: 4px 11px; transition: all .15s;
 }
+.sbtn.asc::after  { content: ' ▲'; font-size: 9px; }
+.sbtn.desc::after { content: ' ▼'; font-size: 9px; }
 .sbtn:hover { border-color: var(--c1); color: var(--text); }
 .sbtn.on { border-color: var(--c1); color: var(--c1); background: rgba(0,229,255,.08); }
 
@@ -568,23 +562,21 @@ canvas { width: 100% !important; }
       <!-- Level filter -->
       <div class="filter-group">
         <div class="filter-group-label">레벨</div>
-        <div class="sel-group">
-          <select class="filter-sel" id="lvMin">
-            <option value="">MIN</option>
-          </select>
-          <span style="color:var(--dim);font-size:11px">~</span>
-          <select class="filter-sel" id="lvMax">
-            <option value="">MAX</option>
-          </select>
+        <div class="chips" id="lvRangeChips">
+          <span class="chip on c1" data-lv="all">전체</span>
+          <span class="chip" data-lv="1-5">1~5</span>
+          <span class="chip" data-lv="6-10">6~10</span>
+          <span class="chip" data-lv="11-15">11~15</span>
+          <span class="chip" data-lv="16-20">16~20</span>
         </div>
       </div>
 
       <!-- Floor filter -->
       <div class="filter-group">
         <div class="filter-group-label">층(Floor)</div>
-        <select class="filter-sel" id="floorSel" style="min-width:100px">
-          <option value="">전체</option>
-        </select>
+        <div class="chips" id="floorRangeChips">
+          <span class="chip on c1" data-fl="all">전체</span>
+        </div>
       </div>
 
       <!-- Song search -->
@@ -625,11 +617,11 @@ canvas { width: 100% !important; }
           <div class="tcount" id="tcount"></div>
           <div class="sctrl">
             <span class="slabel">정렬</span>
-            <button class="sbtn on" data-s="name">곡명</button>
+            <button class="sbtn on desc" data-s="level">레벨</button>
+            <button class="sbtn" data-s="floor">층</button>
             <button class="sbtn" data-s="diff">점수차</button>
             <button class="sbtn" data-s="score">최고점</button>
-            <button class="sbtn" data-s="level">레벨</button>
-            <button class="sbtn" data-s="floor">층</button>
+            <button class="sbtn" data-s="name">곡명</button>
           </div>
         </div>
         <div class="thead">
@@ -703,12 +695,15 @@ canvas { width: 100% !important; }
 /* ─── State ─────────────────────────────────────────────────── */
 let allData = [];
 let selBtn  = 6;
-let sortBy  = 'name';
-let mode    = 'compare'; // 'compare' | 'solo'
+let sortBy  = 'level';
+let sortDir = 'desc'; // 'asc' | 'desc'
+let mode    = 'compare';
 const pats  = new Set(['SC']);
 const disp  = { common: true, p1: true, p2: true };
 let currentTab = 'table';
 let charts = {};
+let selLvRange = 'all';  // 'all' | '1-5' | '6-10' | ...
+let selFloor   = 'all';  // 'all' | floor value string
 
 /* ─── Chart defaults ─────────────────────────────────────────── */
 Chart.defaults.color = '#555575';
@@ -741,9 +736,12 @@ function setMode(m) {
 }
 
 /* ─── Filter state ───────────────────────────────────────────── */
-function getLvMin()  { return $('lvMin').value  ? +$('lvMin').value  : null; }
-function getLvMax()  { return $('lvMax').value  ? +$('lvMax').value  : null; }
-function getFloor()  { return $('floorSel').value || null; }
+function getLvRange() {
+  if (selLvRange === 'all') return null;
+  const [mn, mx] = selLvRange.split('-').map(Number);
+  return { min: mn, max: mx };
+}
+function getFloorFilter() { return selFloor === 'all' ? null : selFloor; }
 function getSearch() { return $('songSearch').value.trim().toLowerCase(); }
 
 /* ─── Fetch ──────────────────────────────────────────────────── */
@@ -839,24 +837,33 @@ function refreshSummary() {
 
 /* ─── Populate filters ───────────────────────────────────────── */
 function populateFilters() {
-  const levels = [...new Set(allData.map(d => d.level).filter(Boolean))].sort((a,b)=>a-b);
+  // 층 버튼 동적 생성
   const floorMap = new Map();
-  allData.forEach(d => { if (d.floor != null) floorMap.set(d.floor, d.floorName || `${d.floor}층`); });
-  const floors = [...floorMap.entries()].sort((a,b)=>a[0]-b[0]);
+  allData.forEach(d => { if (d.floor != null) floorMap.set(String(d.floor), d.floorName || `${d.floor}층`); });
+  const floors = [...floorMap.entries()].sort((a,b) => +a[0] - +b[0]);
 
-  $('lvMin').innerHTML = '<option value="">MIN</option>';
-  $('lvMax').innerHTML = '<option value="">MAX</option>';
-  levels.forEach(l => {
-    $('lvMin').insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
-    $('lvMax').insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
+  const fc = $('floorRangeChips');
+  fc.innerHTML = '<span class="chip on c1" data-fl="all">전체</span>';
+  floors.forEach(([fv, fn]) => {
+    fc.insertAdjacentHTML('beforeend', `<span class="chip" data-fl="${fv}">${fn}</span>`);
   });
-  $('floorSel').innerHTML = '<option value="">전체</option>';
-  floors.forEach(([fv, fn]) => $('floorSel').insertAdjacentHTML('beforeend', `<option value="${fv}">${fn}</option>`));
+  // 층 버튼 이벤트 재연결
+  fc.querySelectorAll('.chip').forEach(c => {
+    c.onclick = () => {
+      selFloor = c.dataset.fl;
+      fc.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+      onFilterChange();
+    };
+  });
+  selFloor = 'all';
 }
 
 /* ─── Filter & sort ──────────────────────────────────────────── */
 function getFiltered() {
-  const lvMin = getLvMin(), lvMax = getLvMax(), floor = getFloor(), search = getSearch();
+  const lvRange = getLvRange();
+  const floor   = getFloorFilter();
+  const search  = getSearch();
   return allData
     .filter(d => pats.has(d.pattern))
     .filter(d => {
@@ -865,26 +872,27 @@ function getFiltered() {
       if (d.r1 && !d.r2) return disp.p1;
       return disp.p2;
     })
-    .filter(d => lvMin == null || d.level >= lvMin)
-    .filter(d => lvMax == null || d.level <= lvMax)
-    .filter(d => floor == null || String(d.floor) === floor)
-    .filter(d => !search || (d.name || d.title || '').toLowerCase().includes(search));
+    .filter(d => !lvRange || (d.level >= lvRange.min && d.level <= lvRange.max))
+    .filter(d => !floor   || String(d.floor) === floor)
+    .filter(d => !search  || (d.name || d.title || '').toLowerCase().includes(search));
 }
 
 function sortData(data) {
-  return data.sort((a, b) => {
+  const dir = sortDir === 'asc' ? 1 : -1;
+  return [...data].sort((a, b) => {
+    let v = 0;
     switch (sortBy) {
-      case 'name':  return (a.name||'').localeCompare(b.name||'') || a.pattern.localeCompare(b.pattern);
-      case 'level': return (b.level||0) - (a.level||0);
-      case 'floor': return (b.floor||0) - (a.floor||0);
-      case 'score': return Math.max(b.r1?.score||0, b.r2?.score||0) - Math.max(a.r1?.score||0, a.r2?.score||0);
+      case 'name':  v = (a.name||'').localeCompare(b.name||'') || a.pattern.localeCompare(b.pattern); break;
+      case 'level': v = (a.level||0) - (b.level||0); break;
+      case 'floor': v = (a.floor||0) - (b.floor||0); break;
+      case 'score': v = Math.max(a.r1?.score||0, a.r2?.score||0) - Math.max(b.r1?.score||0, b.r2?.score||0); break;
       case 'diff': {
         const ad = (a.r1&&a.r2) ? Math.abs(a.r1.score-a.r2.score) : -1;
         const bd = (b.r1&&b.r2) ? Math.abs(b.r1.score-b.r2.score) : -1;
-        return bd - ad;
+        v = ad - bd; break;
       }
     }
-    return 0;
+    return v * dir;
   });
 }
 
@@ -947,6 +955,10 @@ function render() {
     frag.appendChild(row);
   });
   const tbody = $('tbody');
+  if (!data.length) {
+    tbody.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--dim);font-size:13px">조건에 맞는 곡이 없습니다</div>';
+    return;
+  }
   tbody.innerHTML = '';
   tbody.appendChild(frag);
 }
@@ -1115,10 +1127,30 @@ document.querySelectorAll('[data-d]').forEach(c => {
   };
 });
 
+// 레벨 범위 버튼
+document.querySelectorAll('#lvRangeChips .chip').forEach(c => {
+  c.onclick = () => {
+    selLvRange = c.dataset.lv;
+    document.querySelectorAll('#lvRangeChips .chip').forEach(x => x.classList.remove('on'));
+    c.classList.add('on');
+    onFilterChange();
+  };
+});
+
+// 정렬 버튼 - 같은 버튼 누르면 방향 전환
 document.querySelectorAll('.sbtn').forEach(b => {
   b.onclick = () => {
-    sortBy = b.dataset.s;
-    document.querySelectorAll('.sbtn').forEach(x => x.classList.toggle('on', x.dataset.s === sortBy));
+    const s = b.dataset.s;
+    if (sortBy === s) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortBy  = s;
+      sortDir = (s === 'name') ? 'asc' : 'desc';
+    }
+    document.querySelectorAll('.sbtn').forEach(x => {
+      x.classList.remove('on', 'asc', 'desc');
+      if (x.dataset.s === sortBy) { x.classList.add('on', sortDir); }
+    });
     render();
   };
 });
@@ -1129,11 +1161,7 @@ function onFilterChange() {
   if (currentTab === 'chart') renderCharts();
 }
 
-$('lvMin').addEventListener('change', onFilterChange);
-$('lvMax').addEventListener('change', onFilterChange);
-$('floorSel').addEventListener('change', onFilterChange);
 $('songSearch').addEventListener('input', onFilterChange);
-
 $('goBtn').onclick = doSearch;
 [$('n1'), $('n2')].forEach(el => el.addEventListener('keydown', e => e.key === 'Enter' && doSearch()));
 
