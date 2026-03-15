@@ -499,7 +499,7 @@ canvas { width: 100% !important; }
 
   <!-- Header -->
   <header>
-    <div class="logo">V-ARCHIVE Compare</div>
+    <div class="logo" onclick="location.reload()" style="cursor:pointer" title="클릭하여 초기화">V-ARCHIVE Compare</div>
     <div class="subtitle">DJMAX RESPECT V · Score Comparison</div>
   </header>
 
@@ -581,6 +581,16 @@ canvas { width: 100% !important; }
         </div>
       </div>
 
+      <!-- MaxCombo filter -->
+      <div class="filter-group">
+        <div class="filter-group-label">MAX콤보</div>
+        <div class="chips" id="mcChips">
+          <span class="chip on c1" data-mc="all">전체</span>
+          <span class="chip" data-mc="yes">✦ 달성</span>
+          <span class="chip" data-mc="no">미달성</span>
+        </div>
+      </div>
+
       <!-- Song search -->
       <div class="search-wrap">
         <div class="filter-group-label">곡명 검색</div>
@@ -628,13 +638,13 @@ canvas { width: 100% !important; }
         </div>
         <div class="thead">
           <div></div><div>곡명 / 패턴</div>
-          <div class="h1" style="text-align:right">SCORE</div>
-          <div class="h1 hc">MC</div>
+          <div class="h1" style="text-align:right" id="thScore1">P1 SCORE</div>
+          <div class="h1 hc" id="thMc1">MC</div>
           <div class="h1" style="text-align:right">BAR</div>
           <div class="hc">DIFF</div>
           <div class="h2">BAR</div>
-          <div class="h2 hc">MC</div>
-          <div class="h2">SCORE</div>
+          <div class="h2 hc" id="thMc2">MC</div>
+          <div class="h2" id="thScore2">P2 SCORE</div>
         </div>
         <div id="tbody"></div>
       </div>
@@ -704,8 +714,9 @@ const pats  = new Set(['SC']);
 const disp  = { common: true, p1: true, p2: true };
 let currentTab = 'table';
 let charts = {};
-let selLvRange = 'all';  // 'all' | '1-5' | '6-10' | ...
-let selFloor   = 'all';  // 'all' | floor value string
+let selLvRange = 'all';  // 'all' | '1-5' | '6-10' | '11-15'
+let selFloor   = 'all';  // 'all' | '1-5' | '6-10' | '11+'
+let selMc      = 'all';  // 'all' | 'yes' | 'no'
 
 /* ─── Chart defaults ─────────────────────────────────────────── */
 Chart.defaults.color = '#555575';
@@ -743,14 +754,16 @@ function getLvRange() {
   const [mn, mx] = selLvRange.split('-').map(Number);
   return { min: mn, max: mx };
 }
-// floor 값은 소수점 포함 숫자(예: 1.0, 6.5, 11.2)
-// '1-5' → [1, 6), '6-10' → [6, 11), '11+' → [11, ∞)
+// floor는 소수점 숫자 (예: 4.2, 10.2, 12.3) 또는 null (floor 미등록 곡)
+// Math.floor()로 정수 변환 후 범위 비교
+// floor가 null인 곡은 범위 필터 선택 시 제외됨 (전체 선택 시만 포함)
 function floorInRange(floorVal) {
   if (selFloor === 'all') return true;
-  const f = parseFloat(floorVal);
+  if (floorVal == null || floorVal === '' || floorVal === undefined) return false;
+  const f = Math.floor(parseFloat(floorVal));
   if (isNaN(f)) return false;
-  if (selFloor === '1-5')  return f >= 1  && f < 6;
-  if (selFloor === '6-10') return f >= 6  && f < 11;
+  if (selFloor === '1-5')  return f >= 1  && f <= 5;
+  if (selFloor === '6-10') return f >= 6  && f <= 10;
   if (selFloor === '11+')  return f >= 11;
   return true;
 }
@@ -830,7 +843,7 @@ function refreshSummary() {
     $('summarySolo').innerHTML = `
       <div class="sname">${n1}</div>
       <div class="sstat">전체 기록 <b>${allData.length}</b>곡 &nbsp;·&nbsp; 현재 필터 <b>${filtered.length}</b>곡</div>
-      <div class="sstat">맥콤보 <b style="color:var(--gold)">${mc}</b></div>`;
+      <div class="sstat">MAX콤보 <b style="color:var(--gold)">${mc}</b></div>`;
   } else {
     $('summaryCompare').style.display = '';
     $('summarySolo').style.display = 'none';
@@ -849,16 +862,13 @@ function refreshSummary() {
 
 /* ─── Populate filters ───────────────────────────────────────── */
 function populateFilters() {
-  // 층 버튼은 고정(1~5, 6~10, 11~)이므로 이벤트만 연결
-  $('floorRangeChips').querySelectorAll('.chip').forEach(c => {
-    c.onclick = () => {
-      selFloor = c.dataset.fl;
-      $('floorRangeChips').querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
-      c.classList.add('on');
-      onFilterChange();
-    };
-  });
-  selFloor = 'all';
+  // 데이터 로드 후 초기화가 필요한 상태만 리셋
+  selFloor   = 'all';
+  selLvRange = 'all';
+  selMc      = 'all';
+  $('lvRangeChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.lv === 'all'));
+  $('floorRangeChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.fl === 'all'));
+  $('mcChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.mc === 'all'));
 }
 
 /* ─── Filter & sort ──────────────────────────────────────────── */
@@ -875,6 +885,14 @@ function getFiltered() {
     })
     .filter(d => !lvRange || (d.level >= lvRange.min && d.level <= lvRange.max))
     .filter(d => floorInRange(d.floor))
+    .filter(d => {
+      if (selMc === 'all') return true;
+      // 비교 모드: 둘 중 하나라도 해당하면 표시
+      const mc1 = !!d.r1?.maxCombo, mc2 = !!d.r2?.maxCombo;
+      if (mode === 'solo') return selMc === 'yes' ? mc1 : !mc1;
+      if (selMc === 'yes') return mc1 || mc2;
+      return !mc1 || !mc2; // 미달성: 둘 중 하나라도 미달성
+    })
     .filter(d => !search  || (d.name || d.title || '').toLowerCase().includes(search));
 }
 
@@ -901,6 +919,20 @@ function sortData(data) {
 function render() {
   refreshSummary();
   if (currentTab !== 'table') return;
+
+  // 헤더 플레이어 이름 업데이트
+  const n1 = $('n1').value.trim() || 'P1';
+  const n2 = $('n2').value.trim() || 'P2';
+  if (mode === 'solo') {
+    if ($('thScore1')) $('thScore1').textContent = n1;
+    if ($('thMc1'))   $('thMc1').textContent = 'MAX';
+  } else {
+    if ($('thScore1')) $('thScore1').textContent = n1;
+    if ($('thScore2')) $('thScore2').textContent = n2;
+    if ($('thMc1'))   $('thMc1').textContent = 'MAX';
+    if ($('thMc2'))   $('thMc2').textContent = 'MAX';
+  }
+
   const data = sortData(getFiltered());
   $('tcount').textContent = `${data.length}개 패턴`;
 
@@ -932,7 +964,7 @@ function render() {
         <div class="rnum">${i+1}</div>
         <div>${meta}</div>
         <div class="sc" style="color:var(--c1);text-align:right;grid-column:3/6">${s1!==null?s1.toFixed(2):'N/A'}</div>
-        <div class="mc" style="grid-column:6">${d.r1?.maxCombo?'<span class="mci">✦</span>':''}</div>
+        <div class="mc" style="grid-column:6">${d.r1?.maxCombo?`<span class="mci" title="${n1} MAX콤보">✦</span>`:''}</div>
         <div style="grid-column:7/10"><div class="bar"><div class="bf bf1" style="width:${s1??0}%"></div></div></div>`;
     } else {
       row.innerHTML = `
@@ -946,11 +978,11 @@ function render() {
           </div>
         </div>
         <div class="sc ${s1!==null?c1:'na'} col-sc1">${s1!==null?s1.toFixed(2):'N/A'}</div>
-        <div class="mc col-mc1">${d.r1?.maxCombo?'<span class="mci">✦</span>':''}</div>
+        <div class="mc col-mc1">${d.r1?.maxCombo?`<span class="mci" title="${n1} MAX콤보">✦</span>`:''}</div>
         <div class="bar col-bar1"><div class="bf bf1" style="width:${s1??0}%"></div></div>
         <div class="diff ${dcls} col-diff">${dtxt}</div>
         <div class="bar col-bar2"><div class="bf bf2" style="width:${s2??0}%"></div></div>
-        <div class="mc col-mc2">${d.r2?.maxCombo?'<span class="mci">✦</span>':''}</div>
+        <div class="mc col-mc2">${d.r2?.maxCombo?`<span class="mci" title="${n2} MAX콤보">✦</span>`:''}</div>
         <div class="sc p2s ${s2!==null?c2:'na'} col-sc2">${s2!==null?s2.toFixed(2):'N/A'}</div>`;
     }
     frag.appendChild(row);
@@ -1031,9 +1063,9 @@ function renderStats() {
     row('무승부', tdr, 'var(--dim)') +
     row(`${n2} 승`, tw2, 'var(--c2)') +
     row('평균 점수차', `${avgD>=0?'+':''}${avgD.toFixed(2)}`, avgD>=0?'var(--c1)':'var(--c2)') +
-    row(`${n1} 맥콤보`, mc1, 'var(--gold)') +
+    row(`${n1} MAX콤보`, mc1, 'var(--gold)') +
     `<div class="level-row" style="grid-template-columns:1fr 1fr;font-size:12px;border-bottom:none">
-      <div style="color:var(--dim)">${n2} 맥콤보</div>
+      <div style="color:var(--dim)">${n2} MAX콤보</div>
       <div style="text-align:right;color:var(--gold);font-family:var(--font-mono)">${mc2}</div>
     </div>`;
 }
@@ -1133,6 +1165,26 @@ document.querySelectorAll('#lvRangeChips .chip').forEach(c => {
   c.onclick = () => {
     selLvRange = c.dataset.lv;
     document.querySelectorAll('#lvRangeChips .chip').forEach(x => x.classList.remove('on'));
+    c.classList.add('on');
+    onFilterChange();
+  };
+});
+
+// 층 범위 버튼
+document.querySelectorAll('#floorRangeChips .chip').forEach(c => {
+  c.onclick = () => {
+    selFloor = c.dataset.fl;
+    document.querySelectorAll('#floorRangeChips .chip').forEach(x => x.classList.remove('on'));
+    c.classList.add('on');
+    onFilterChange();
+  };
+});
+
+// 맥콤보 필터 버튼
+document.querySelectorAll('#mcChips .chip').forEach(c => {
+  c.onclick = () => {
+    selMc = c.dataset.mc;
+    document.querySelectorAll('#mcChips .chip').forEach(x => x.classList.remove('on'));
     c.classList.add('on');
     onFilterChange();
   };
